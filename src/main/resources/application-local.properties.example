@@ -1,0 +1,21 @@
+# Copy to application-local.properties (gitignored) for local development.
+# Run: supabase start   (spins up local Postgres + GoTrue Auth + Studio via Docker)
+# Run: ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+#
+# Postgres AND auth are both local (Supabase CLI stack) - sign in via
+# supabase-js against http://127.0.0.1:54321 (or POST /auth/v1/signup directly)
+# to get a real, JWKS-verifiable user JWT for curl/Postman testing.
+
+spring.datasource.url=jdbc:postgresql://127.0.0.1:54322/postgres?currentSchema=app
+spring.datasource.username=postgres
+spring.datasource.password=postgres
+
+spring.security.oauth2.resourceserver.jwt.jwk-set-uri=${SUPABASE_JWKS_URI}
+# Supabase's asymmetric signing keys are ES256, not the RS256 Spring assumes by default.
+spring.security.oauth2.resourceserver.jwt.jws-algorithms=ES256
+
+# mock is the only adapter implemented right now - it echoes a canned reply so /chat
+# is testable offline with no real model call. See com.pm.bellavera.llm.LlmConfig.
+bellavera.llm.provider=mock
+
+app.cors.allowed-origins=http://localhost:5173
