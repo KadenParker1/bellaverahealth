@@ -1,0 +1,28 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+
+@theme {
+  --color-magenta-100: #fce7f3;
+  --color-magenta-500: #d6006f;
+  --color-magenta-600: #b8005f;
+  --color-magenta-700: #94004c;
+
+  --color-ink: #151417;
+  --color-ink-muted: #6b6570;
+
+  --color-surface: #ffffff;
+  --color-surface-subtle: #faf7f9;
+  --color-surface-border: #ece6ea;
+
+  --font-sans: 'Inter Variable', system-ui, -apple-system, sans-serif;
+
+  --shadow-card:
+    0 1px 2px rgba(21, 20, 23, 0.04), 0 8px 24px rgba(21, 20, 23, 0.06);
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-surface-subtle);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
