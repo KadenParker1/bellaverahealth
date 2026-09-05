@@ -24,6 +24,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class ChatIntegrationTest extends AbstractIntegrationTest {
@@ -35,6 +36,52 @@ class ChatIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private ChatProperties chatProperties;
+
+    /**
+     * A turn costs a model call, so an account cannot make unlimited ones. The limit is read from
+     * configuration rather than hard-coded here: the point is that one exists and bites.
+     */
+    @Test
+    void chatIsRateLimitedPerUser() throws Exception {
+        UUID userId = UUID.randomUUID();
+        var auth = JwtTestSupport.supabaseUser(userId, userId + "@example.com");
+        int limit = chatProperties.rateLimitRequestsOrDefault();
+
+        for (int i = 0; i < limit; i++) {
+            mockMvc.perform(post("/api/v1/chat").with(auth)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(new ChatRequest(null, "turn " + i))))
+                    .andExpect(status().isOk());
+        }
+
+        mockMvc.perform(post("/api/v1/chat").with(auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ChatRequest(null, "one too many"))))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists("Retry-After"));
+
+        // The limit is per user, not global.
+        UUID otherId = UUID.randomUUID();
+        mockMvc.perform(post("/api/v1/chat").with(JwtTestSupport.supabaseUser(otherId, otherId + "@example.com"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ChatRequest(null, "hello"))))
+                .andExpect(status().isOk());
+    }
+
+    /** The message is persisted and replayed into later turns, so it cannot be unbounded. */
+    @Test
+    void anOverlongChatMessageIsRejected() throws Exception {
+        UUID userId = UUID.randomUUID();
+        mockMvc.perform(post("/api/v1/chat")
+                        .with(JwtTestSupport.supabaseUser(userId, userId + "@example.com"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new ChatRequest(null, "x".repeat(4001)))))
+                .andExpect(status().isBadRequest());
+    }
 
     @Test
     void chatUsesMockProviderAndPersistsThreadAndMessages() throws Exception {

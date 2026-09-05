@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface SurveySectionRepository extends JpaRepository<SurveySection, UUID> {
 
     List<SurveySection> findBySurveyVersionIdOrderBySortOrder(UUID surveyVersionId);
+
+    void deleteBySurveyVersionId(UUID surveyVersionId);
 }

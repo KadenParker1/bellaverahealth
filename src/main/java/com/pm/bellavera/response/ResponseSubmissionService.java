@@ -19,6 +19,9 @@ import com.pm.bellavera.user.AppUser;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -86,10 +89,9 @@ public class ResponseSubmissionService {
                         .build());
 
         List<AnswerRequest> incoming = request.answers() != null ? request.answers() : List.of();
-        Map<String, AnswerRequest> incomingByCode = incoming.stream()
-                .collect(Collectors.toMap(AnswerRequest::questionCode, a -> a, (a, b) -> a));
+        List<String> errors = new ArrayList<>(duplicateCodeErrors(incoming));
 
-        List<String> errors = new ArrayList<>();
+        Map<String, AnswerRequest> incomingByCode = new LinkedHashMap<>();
         for (AnswerRequest answerRequest : incoming) {
             Question question = questionsByCode.get(answerRequest.questionCode());
             if (question == null) {
@@ -98,6 +100,7 @@ public class ResponseSubmissionService {
             }
             errors.addAll(answerValidator.validate(question, answerRequest,
                     optionsByQuestionId.getOrDefault(question.getId(), List.of())));
+            incomingByCode.putIfAbsent(answerRequest.questionCode(), answerRequest);
         }
 
         Map<String, Answer> existingAnswersByCode = response.getId() != null
@@ -106,19 +109,7 @@ public class ResponseSubmissionService {
                 : Map.of();
 
         if (request.status() == ResponseStatus.SUBMITTED) {
-            for (Question question : questions) {
-                if (!question.isRequired()) {
-                    continue;
-                }
-                if (!displayRuleEvaluator.isVisible(question.getDisplayRule(), incomingByCode)) {
-                    continue;
-                }
-                boolean answeredNow = hasValue(incomingByCode.get(question.getCode()));
-                boolean answeredBefore = existingAnswersByCode.containsKey(question.getCode());
-                if (!answeredNow && !answeredBefore) {
-                    errors.add(question.getCode() + ": required");
-                }
-            }
+            errors.addAll(missingRequiredAnswers(questions, effectiveAnswers(existingAnswersByCode, incomingByCode)));
         }
 
         if (!errors.isEmpty()) {
@@ -127,7 +118,7 @@ public class ResponseSubmissionService {
 
         surveyResponseRepository.save(response);
 
-        for (AnswerRequest answerRequest : incoming) {
+        for (AnswerRequest answerRequest : incomingByCode.values()) {
             Question question = questionsByCode.get(answerRequest.questionCode());
             Answer answer = existingAnswersByCode.getOrDefault(question.getCode(), Answer.builder()
                     .surveyResponse(response)
@@ -160,6 +151,66 @@ public class ResponseSubmissionService {
         }
 
         return toDetailDto(response);
+    }
+
+    /**
+     * The same question twice in one request. The write loop would build a second {@code Answer}
+     * for it and trip the {@code (survey_response_id, question_id)} unique index - a 500 for what
+     * is plainly a bad request. Rejecting it also avoids having to invent which of the two wins.
+     */
+    private List<String> duplicateCodeErrors(List<AnswerRequest> incoming) {
+        Set<String> seen = new HashSet<>();
+        Set<String> duplicated = new java.util.LinkedHashSet<>();
+        for (AnswerRequest answer : incoming) {
+            if (!seen.add(answer.questionCode())) {
+                duplicated.add(answer.questionCode());
+            }
+        }
+        return duplicated.stream().map(code -> code + ": answered more than once in one request").toList();
+    }
+
+    /**
+     * What this response says after applying the request - saved answers, overlaid with the ones
+     * just sent.
+     *
+     * <p>Required-ness has to be judged against this and not against the request alone. A survey is
+     * answered over several saves, so a request carrying only the last page's answers says nothing
+     * about the earlier ones; evaluating a display rule against it made every conditional question
+     * look hidden, and a hidden question's required check is skipped. Conditional questions could
+     * therefore be left unanswered by submitting a response one page at a time.
+     */
+    private Map<String, AnswerRequest> effectiveAnswers(Map<String, Answer> stored,
+                                                         Map<String, AnswerRequest> incoming) {
+        Map<String, AnswerRequest> effective = new HashMap<>();
+        stored.forEach((code, answer) -> effective.put(code, toAnswerRequest(answer)));
+        effective.putAll(incoming);
+        return effective;
+    }
+
+    private List<String> missingRequiredAnswers(List<Question> questions, Map<String, AnswerRequest> answers) {
+        List<String> errors = new ArrayList<>();
+        for (Question question : questions) {
+            if (!question.isRequired()) {
+                continue;
+            }
+            if (!displayRuleEvaluator.isVisible(question.getDisplayRule(), answers)) {
+                continue;
+            }
+            if (!hasValue(answers.get(question.getCode()))) {
+                errors.add(question.getCode() + ": required");
+            }
+        }
+        return errors;
+    }
+
+    private AnswerRequest toAnswerRequest(Answer answer) {
+        return new AnswerRequest(
+                answer.getQuestionCode(),
+                answer.getValueText(),
+                answer.getValueNumber(),
+                answer.getValueBoolean(),
+                answer.getValueDate(),
+                answer.getSelectedOptions().stream().map(QuestionOption::getCode).toList());
     }
 
     @Transactional(readOnly = true)

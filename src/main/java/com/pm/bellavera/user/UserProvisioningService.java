@@ -1,6 +1,7 @@
 package com.pm.bellavera.user;
 
 import java.util.UUID;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,7 +24,13 @@ public class UserProvisioningService {
     @Transactional
     public AppUser resolve(Jwt jwt) {
         UUID userId = UUID.fromString(jwt.getSubject());
-        return appUserRepository.findById(userId).orElseGet(() -> provision(userId, jwt));
+        AppUser user = appUserRepository.findById(userId).orElseGet(() -> provision(userId, jwt));
+        // Belt and braces: SupabaseJwtAuthenticationConverter already refuses to authenticate a
+        // non-ACTIVE account, so reaching here means something bypassed the filter chain.
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new AccessDeniedException("Account is " + user.getStatus());
+        }
+        return user;
     }
 
     private AppUser provision(UUID userId, Jwt jwt) {

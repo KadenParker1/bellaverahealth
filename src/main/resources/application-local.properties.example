@@ -19,3 +19,12 @@ spring.security.oauth2.resourceserver.jwt.jws-algorithms=ES256
 bellavera.llm.provider=mock
 
 app.cors.allowed-origins=http://localhost:5173
+
+# The mock payment gateway is the local default: the whole store flow - checkout, the payment
+# webhook, fulfillment - works with no Stripe account. To exercise Stripe for real, set the two
+# secrets below and flip the provider, then forward events with:
+#   stripe listen --forward-to localhost:8080/api/v1/webhooks/stripe
+bellavera.store.payment-provider=mock
+#bellavera.store.payment-provider=stripe
+#bellavera.store.stripe.secret-key=sk_test_...
+#bellavera.store.stripe.webhook-secret=whsec_...

@@ -7,4 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface SurveyRepository extends JpaRepository<Survey, UUID> {
 
     List<Survey> findByActiveTrueOrderBySortOrder();
+
+    List<Survey> findAllByOrderBySortOrderAscTitleAsc();
+
+    boolean existsByCode(String code);
 }

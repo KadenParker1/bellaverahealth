@@ -1,5 +1,6 @@
 package com.pm.bellavera.chat.api;
 
+import com.pm.bellavera.chat.ChatRateLimiter;
 import com.pm.bellavera.chat.ChatService;
 import com.pm.bellavera.user.AppUser;
 import com.pm.bellavera.user.CurrentUser;
@@ -18,13 +19,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class ChatController {
 
     private final ChatService chatService;
+    private final ChatRateLimiter chatRateLimiter;
 
-    public ChatController(ChatService chatService) {
+    public ChatController(ChatService chatService, ChatRateLimiter chatRateLimiter) {
         this.chatService = chatService;
+        this.chatRateLimiter = chatRateLimiter;
     }
 
+    /** Rate limited here rather than in the service, so a refused turn never opens a transaction. */
     @PostMapping("/chat")
     public ChatResponseDto chat(@CurrentUser AppUser user, @Valid @RequestBody ChatRequest request) {
+        chatRateLimiter.checkAndRecord(user.getId());
         return chatService.chat(user, request.threadId(), request.message());
     }
 
