@@ -70,6 +70,10 @@ public class UserProfile extends AuditableEntity implements Persistable<UUID> {
     @Column(name = "consent_ai_at")
     private Instant consentAiAt;
 
+    @Builder.Default
+    @Column(name = "email_opt_in", nullable = false)
+    private boolean emailOptIn = false;
+
     @Override
     @Transient
     public UUID getId() {

@@ -14,7 +14,8 @@ public record UserProfileResponse(
         UnitSystem unitSystem,
         Instant onboardingCompletedAt,
         Instant consentTermsAt,
-        Instant consentAiAt) {
+        Instant consentAiAt,
+        boolean emailOptIn) {
 
     static UserProfileResponse from(AppUser user, UserProfile profile) {
         return new UserProfileResponse(
@@ -28,6 +29,7 @@ public record UserProfileResponse(
                 profile.getUnitSystem(),
                 profile.getOnboardingCompletedAt(),
                 profile.getConsentTermsAt(),
-                profile.getConsentAiAt());
+                profile.getConsentAiAt(),
+                profile.isEmailOptIn());
     }
 }

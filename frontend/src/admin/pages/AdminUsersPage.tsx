@@ -4,7 +4,7 @@ import { Card } from '../../components/ui/Card'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { Spinner } from '../../components/ui/Spinner'
 import { useMe } from '../../profile/hooks'
-import { useAdminUsers, useUpdateUserStatus } from '../hooks'
+import { useAdminUsers, useBroadcastEmail, useUpdateUserStatus } from '../hooks'
 import type { AdminUserDto, UserStatus } from '../../types/api'
 
 interface UserView {
@@ -40,6 +40,8 @@ export function AdminUsersPage() {
 
   return (
     <div>
+      <EmailBroadcastCard />
+
       <div className="mb-6">
         <div className="mb-3 flex flex-wrap gap-2">
           {VIEWS.map((candidate) => (
@@ -134,6 +136,7 @@ function AdminUserRow({ user, isSelf }: { user: AdminUserDto; isSelf: boolean })
             {user.displayName ? `${user.email} · ` : ''}
             joined {new Date(user.createdAt).toLocaleDateString()}
             {user.onboardingCompletedAt ? '' : ' · onboarding incomplete'}
+            {user.emailOptIn ? ' · subscribed to email chain' : ''}
           </p>
         </div>
 
@@ -190,6 +193,111 @@ function AdminUserRow({ user, isSelf }: { user: AdminUserDto; isSelf: boolean })
               Cancel
             </Button>
           </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function EmailBroadcastCard() {
+  const [open, setOpen] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [result, setResult] = useState<{ sentCount: number; failedCount: number } | null>(null)
+  const broadcast = useBroadcastEmail()
+
+  function submit() {
+    broadcast.mutate(
+      { subject, body },
+      {
+        onSuccess: (data) => {
+          setResult(data)
+          setSubject('')
+          setBody('')
+          setOpen(false)
+          setConfirming(false)
+        },
+      },
+    )
+  }
+
+  return (
+    <Card className="mb-6 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-ink">Email chain</p>
+          <p className="text-xs text-ink-muted">
+            Sends one email to every account that has opted into the email chain.
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setOpen((value) => !value)
+            setConfirming(false)
+          }}
+        >
+          {open ? 'Cancel' : 'Compose broadcast'}
+        </Button>
+      </div>
+
+      {result && !open && (
+        <p className="mt-3 text-sm text-ink-muted">
+          Sent to {result.sentCount} {result.sentCount === 1 ? 'subscriber' : 'subscribers'}.
+          {result.failedCount > 0 ? ` ${result.failedCount} failed to send.` : ''}
+        </p>
+      )}
+
+      {broadcast.error ? (
+        <div className="mt-3">
+          <ErrorBanner error={broadcast.error} />
+        </div>
+      ) : null}
+
+      {open && (
+        <div className="mt-4 space-y-3 border-t border-surface-border pt-4">
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs text-ink-muted">Subject</span>
+            <input
+              value={subject}
+              onChange={(event) => setSubject(event.target.value)}
+              maxLength={200}
+              className="w-full rounded-lg border border-surface-border px-3 py-2 text-sm text-ink"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs text-ink-muted">Body</span>
+            <textarea
+              value={body}
+              onChange={(event) => setBody(event.target.value)}
+              rows={6}
+              className="w-full rounded-lg border border-surface-border px-3 py-2 text-sm text-ink"
+            />
+          </label>
+
+          {!confirming ? (
+            <Button
+              disabled={broadcast.isPending || !subject.trim() || !body.trim()}
+              onClick={() => setConfirming(true)}
+            >
+              Send to all subscribers
+            </Button>
+          ) : (
+            <div className="rounded-lg border border-surface-border bg-surface-subtle p-3">
+              <p className="mb-3 text-sm text-ink">
+                This sends immediately to every opted-in subscriber and cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <Button disabled={broadcast.isPending} onClick={submit}>
+                  {broadcast.isPending ? 'Sending…' : 'Confirm send'}
+                </Button>
+                <Button variant="ghost" onClick={() => setConfirming(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </Card>

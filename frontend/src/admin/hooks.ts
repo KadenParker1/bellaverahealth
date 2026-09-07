@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as api from './api'
 import { productsQueryKey } from '../store/hooks'
 import type {
+  BroadcastEmailRequest,
   CreateProductRequest,
   CreateSurveyRequest,
   FulfillOrderRequest,
@@ -164,5 +165,13 @@ export function useUpdateUserStatus() {
     mutationFn: ({ userId, body }: { userId: string; body: UpdateUserStatusRequest }) =>
       api.updateUserStatus(userId, body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
+  })
+}
+
+// --- email ---
+
+export function useBroadcastEmail() {
+  return useMutation({
+    mutationFn: (body: BroadcastEmailRequest) => api.broadcastEmail(body),
   })
 }

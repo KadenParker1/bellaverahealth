@@ -15,7 +15,8 @@ public record AdminUserDto(
         UserRole role,
         UserStatus status,
         Instant createdAt,
-        Instant onboardingCompletedAt) {
+        Instant onboardingCompletedAt,
+        boolean emailOptIn) {
 
     public static AdminUserDto from(AppUser user, UserProfile profile) {
         return new AdminUserDto(
@@ -25,6 +26,7 @@ public record AdminUserDto(
                 user.getRole(),
                 user.getStatus(),
                 user.getCreatedAt(),
-                profile == null ? null : profile.getOnboardingCompletedAt());
+                profile == null ? null : profile.getOnboardingCompletedAt(),
+                profile != null && profile.isEmailOptIn());
     }
 }

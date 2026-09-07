@@ -10,5 +10,6 @@ public record UpdateProfileRequest(
         String timezone,
         UnitSystem unitSystem,
         Boolean acceptTerms,
-        Boolean acceptAiConsent) {
+        Boolean acceptAiConsent,
+        Boolean emailOptIn) {
 }

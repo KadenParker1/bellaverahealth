@@ -14,10 +14,7 @@ export class ApiError extends Error {
   }
 }
 
-// TODO(prod): once the frontend and backend are split across Vercel/Railway,
-// swap this for `import.meta.env.VITE_API_BASE_URL ?? '/api/v1'` and configure
-// a Vercel rewrite (or the env var) accordingly. Local dev proxies /api via vite.config.ts.
-const BASE_URL = '/api/v1'
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const {

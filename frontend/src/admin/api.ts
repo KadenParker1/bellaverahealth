@@ -5,6 +5,8 @@ import type {
   AdminProductDto,
   AdminSurveyDto,
   AdminSurveyVersionDto,
+  BroadcastEmailRequest,
+  BroadcastEmailResult,
   CreateProductRequest,
   CreateSurveyRequest,
   FulfillOrderRequest,
@@ -73,3 +75,9 @@ export const listAdminUsers = (status: UserStatus | null) =>
 /** Ban with `SUSPENDED`, reinstate with `ACTIVE`. */
 export const updateUserStatus = (userId: string, body: UpdateUserStatusRequest) =>
   apiClient.patch<AdminUserDto>(`/admin/users/${userId}`, body)
+
+// --- email ---
+
+/** Sends to every account with the email chain opt-in set. */
+export const broadcastEmail = (body: BroadcastEmailRequest) =>
+  apiClient.post<BroadcastEmailResult>('/admin/emails/broadcast', body)

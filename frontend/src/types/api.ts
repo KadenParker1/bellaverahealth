@@ -24,6 +24,7 @@ export interface UserProfileResponse {
   onboardingCompletedAt: string | null
   consentTermsAt: string | null
   consentAiAt: string | null
+  emailOptIn: boolean
 }
 
 export interface UpdateProfileRequest {
@@ -34,6 +35,7 @@ export interface UpdateProfileRequest {
   unitSystem?: UnitSystem
   acceptTerms?: boolean
   acceptAiConsent?: boolean
+  emailOptIn?: boolean
 }
 
 export type SurveyTheme =
@@ -375,11 +377,22 @@ export interface AdminUserDto {
   status: UserStatus
   createdAt: string
   onboardingCompletedAt: string | null
+  emailOptIn: boolean
 }
 
 export interface UpdateUserStatusRequest {
   status: UserStatus
   reason?: string
+}
+
+export interface BroadcastEmailRequest {
+  subject: string
+  body: string
+}
+
+export interface BroadcastEmailResult {
+  sentCount: number
+  failedCount: number
 }
 
 export interface SaveVersionContentRequest {

@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { Spinner } from '../../components/ui/Spinner'
-import { useMe } from '../../profile/hooks'
+import { useMe, useUpdateMe } from '../../profile/hooks'
 import { OrderSummary } from '../../store/components/OrderSummary'
 import { useMyOrders } from '../../store/hooks'
 
@@ -12,6 +12,7 @@ export function MyAccountPage() {
   const { signOut } = useAuth()
   const { data: me, isLoading: meLoading, error: meError } = useMe()
   const { data: orders, isLoading: ordersLoading, error: ordersError } = useMyOrders()
+  const updateMe = useUpdateMe()
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -49,6 +50,22 @@ export function MyAccountPage() {
               </dd>
             </div>
           </dl>
+
+          <label className="mt-6 flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={me.emailOptIn}
+              disabled={updateMe.isPending}
+              onChange={(event) => updateMe.mutate({ emailOptIn: event.target.checked })}
+              className="h-4 w-4 rounded border-surface-border"
+            />
+            Send me the email chain
+          </label>
+          {updateMe.error ? (
+            <div className="mt-3">
+              <ErrorBanner error={updateMe.error} />
+            </div>
+          ) : null}
 
           <div className="mt-6 flex flex-wrap gap-3">
             {me.role === 'ADMIN' && (

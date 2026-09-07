@@ -51,6 +51,9 @@ public class MeController {
         if (Boolean.TRUE.equals(request.acceptAiConsent()) && profile.getConsentAiAt() == null) {
             profile.setConsentAiAt(Instant.now());
         }
+        if (request.emailOptIn() != null) {
+            profile.setEmailOptIn(request.emailOptIn());
+        }
         userProfileRepository.save(profile);
         return UserProfileResponse.from(user, profile);
     }
