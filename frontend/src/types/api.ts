@@ -408,6 +408,61 @@ export interface PageResponse<T> {
   totalPages: number
 }
 
+export interface BlogPostSummaryDto {
+  slug: string
+  title: string
+  excerpt: string | null
+  publishedAt: string | null
+}
+
+export interface BlogPostDto {
+  slug: string
+  title: string
+  excerpt: string | null
+  body: string
+  publishedAt: string | null
+}
+
+export interface AdminBlogPostDto {
+  id: string
+  slug: string
+  title: string
+  excerpt: string | null
+  body: string
+  published: boolean
+  publishedAt: string | null
+  authorEmail: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateBlogPostRequest {
+  title: string
+  excerpt?: string
+  body: string
+}
+
+export interface UpdateBlogPostRequest {
+  title?: string
+  excerpt?: string
+  body?: string
+  published?: boolean
+}
+
+export interface SendContactMessageRequest {
+  subject: string
+  message: string
+}
+
+export interface AdminContactMessageDto {
+  id: string
+  senderEmail: string
+  subject: string
+  message: string
+  createdAt: string
+  readAt: string | null
+}
+
 export interface ProblemDetail {
   type?: string
   title?: string

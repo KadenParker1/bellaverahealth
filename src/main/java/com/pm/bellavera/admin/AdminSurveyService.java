@@ -112,6 +112,11 @@ public class AdminSurveyService {
         if (surveyRepository.existsByCode(request.code())) {
             throw new ValidationException("A survey with code '" + request.code() + "' already exists");
         }
+        if (surveyRepository.existsByThemeAndActiveTrue(request.theme())) {
+            throw new ValidationException("There is already an active survey for the "
+                    + request.theme() + " theme - retire it first, or add a new draft to it instead"
+                    + " of creating a second survey for the same theme");
+        }
 
         Survey survey = surveyRepository.saveAndFlush(Survey.builder()
                 .code(request.code())
@@ -156,6 +161,11 @@ public class AdminSurveyService {
             survey.setSortOrder(request.sortOrder());
         }
         if (request.active() != null) {
+            if (request.active() && !survey.isActive()
+                    && surveyRepository.existsByThemeAndActiveTrueAndIdNot(survey.getTheme(), survey.getId())) {
+                throw new ValidationException("There is already an active survey for the "
+                        + survey.getTheme() + " theme - retire it before restoring this one");
+            }
             survey.setActive(request.active());
         }
         surveyRepository.saveAndFlush(survey);

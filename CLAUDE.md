@@ -29,10 +29,10 @@ admin console.
 
 Stages 0–4 landed in `5c8cf5d`; the frontend landed in `c28fca6`; Stages 5–7 landed together.
 
-**What Stages 5–7 do not include yet:** no order-confirmation or shipped email, no public (signed-out)
-storefront — the shop lives inside the authenticated shell — no refund or cancel flow beyond an
-expired checkout, and no Stripe account is connected: `bellavera.store.payment-provider` is `mock`
-everywhere but `prod`.
+**What Stages 5–7 do not include yet:** no public (signed-out) storefront — the shop lives inside
+the authenticated shell — no refund or cancel flow beyond an expired checkout, and no Stripe account
+is connected: `bellavera.store.payment-provider` is `mock` everywhere but `prod`. (Order-confirmation
+and shipped emails landed after Stage 7 — see "What landed after Stage 7" below.)
 
 **Why the scoring engine moved back.** Stage 5 was the insight engine. It is now Stage 9: the
 rules that turn answers into insights are a business/clinical decision, not a coding one, and
@@ -56,11 +56,18 @@ insight/    InsightRun, Insight, InsightRule — schema + read API exist, engine
 chat/       ChatThread, ChatMessage, ChatContextSnapshot, ChatService, UserContextBuilder
 llm/        LlmChatService port + records + MockLlmChatService. No provider SDK types here.
 store/      Product, CustomerOrder, OrderItem, PaymentEvent; CatalogService, CheckoutService,
-            PaymentApplicationService, OrderService, FulfillmentService; payment/ holds the gateway port
-admin/      AdminSurveyService (authoring), AdminProductService; api/ holds every /admin controller
+            PaymentApplicationService, OrderService, FulfillmentService; payment/ holds the gateway port;
+            OrderEmailListener sends the confirmation/shipped emails, AFTER_COMMIT off OrderPaidEvent /
+            OrderFulfilledEvent
+email/      EmailGateway port + records + MockEmailGateway. No provider SDK types here.
+blog/       BlogPost, BlogService (published posts only), SlugGenerator — no versioning like a survey
+contact/    ContactMessage, ContactService — a message from a signed-in user to the admin inbox
+admin/      AdminSurveyService (authoring), AdminProductService, AdminBlogService, AdminContactService,
+            AdminEmailService (the opt-in broadcast); api/ holds every /admin controller
 audit/      AuditLog + AuditService — every admin mutation writes a row here
 config/     SecurityConfig, SupabaseJwtAuthenticationConverter, CorsProperties, WebMvcConfig
-common/     AuditableEntity, GlobalExceptionHandler (RFC 7807 ProblemDetail), domain exceptions
+common/     AuditableEntity, GlobalExceptionHandler (RFC 7807 ProblemDetail), domain exceptions,
+            PageResponse<T> — the paginated-list shape used wherever a list can grow unbounded
 ```
 
 Fulfillment lives in `store/` rather than its own package: with one shipment per order it is order
@@ -169,9 +176,12 @@ surveys/    renderer/ — SurveyRenderer + a questionRegistry mapping QuestionTy
 themes/     HomePage (4 theme cards), ThemeDetailPage, LearnMorePage (stub), themeConfig
 chat/       ChatPage, composer, message bubbles
 store/      CartContext (localStorage, codes + quantities only), StorePage, CartPage, OrderPage
-admin/      RequireAdmin, AdminLayout, survey list + version editor, product CRUD, fulfillment queue
-account/    MyAccountPage — profile and order history
-content/    About / Contact / Blog placeholder pages the nav points at
+admin/      RequireAdmin, AdminLayout, survey list + version editor (preview mode included), product
+            CRUD, fulfillment queue, blog authoring, the contact-message inbox
+account/    MyAccountPage — profile, order history (paginated), the email-chain opt-in checkbox
+blog/       BlogPage (list, paginated), BlogPostPage (detail by slug) — reads any signed-in user gets
+contact/    ContactPage — the message form; any signed-in user can send one
+content/    AboutPage — real copy, no backend
 lib/        apiClient (attaches Supabase bearer token, throws ApiError), queryClient, supabaseClient
 types/      api.ts — hand-maintained mirror of the backend DTOs
 ```
@@ -209,6 +219,21 @@ route inside it is authenticated *and* past onboarding. `/onboarding` sits outsi
 
 The survey renderer is registry-driven: adding a `QuestionType` means adding a component under
 `surveys/renderer/questions/` and one entry in `questionRegistry.ts`.
+
+**Preview reuses the real renderer, not a mock of it.** The editor's "Preview" toggle runs the
+current draft through `toSectionDtos` — the exact function `Save draft` sends to the server — then
+adapts that into `SurveyRenderer`'s own prop shape via `surveyPreviewAdapter.ts` and renders it
+read-only (`onSubmit` is a no-op). A non-technical author sees precisely what a user would see,
+required-question and display-rule behavior included, without publishing anything.
+
+**At most one active survey per theme**, enforced at both layers: a partial unique index
+(`ux_survey_active_theme`, `V10`) and a pre-check in `AdminSurveyService` on create and on
+reactivating a retired survey. Two active surveys sharing a theme is exactly the bug that let a
+draft-only survey silently eclipse a real one on the home page — the API returned both, and the
+frontend's per-theme lookup picked whichever sorted first. Creating a brand-new survey is
+deliberately not exposed in the admin UI right now (`AdminSurveysPage` only offers "New draft" on
+an existing survey) — there is nowhere on the home page for a sixth theme to go yet, and no way to
+get a second one, other than a manual API/DB action.
 
 Dev requests go to `/api/v1` and Vite proxies `/api` → `localhost:8080`. Splitting the deploy
 across Vercel/Railway means switching `BASE_URL` in `lib/apiClient.ts` to
@@ -277,11 +302,14 @@ stripe listen --forward-to localhost:8080/api/v1/webhooks/stripe
 | GET | `/api/v1/store/products` | Public catalog — active products only |
 | GET | `/api/v1/store/products/{code}` | Public; 404 for an inactive product |
 | POST | `/api/v1/store/checkout` | Codes + quantities in; `{orderId, checkoutUrl}` out |
-| GET | `/api/v1/store/orders/me` | The caller's orders, newest first |
+| GET | `/api/v1/store/orders/me` | The caller's orders, newest first, paginated (`?page=&size=`) |
 | GET | `/api/v1/store/orders/{id}` | The caller's own order; 404 for anyone else's |
 | POST | `/api/v1/webhooks/stripe` | Unauthenticated; the raw body must pass signature verification |
-| GET / POST | `/api/v1/admin/surveys` | Every survey incl. retired; create one plus its v1 draft |
-| GET / PATCH | `/api/v1/admin/surveys/{id}` | `{"active": false}` retires it |
+| GET | `/api/v1/blog` | Published posts only, paginated, newest first |
+| GET | `/api/v1/blog/{slug}` | 404 unless published |
+| POST | `/api/v1/contact` | Sends a message to the admin inbox as the caller |
+| GET / POST | `/api/v1/admin/surveys` | Every survey incl. retired; create one plus its v1 draft — rejected if the theme is already active elsewhere |
+| GET / PATCH | `/api/v1/admin/surveys/{id}` | `{"active": false}` retires it; `{"active": true}` is rejected if another active survey already holds the theme |
 | POST | `/api/v1/admin/surveys/{id}/versions` | Opens a draft cloned from the newest version |
 | GET / PUT / DELETE | `/api/v1/admin/surveys/{id}/versions/{vid}` | Read; whole-document replace (draft only); delete (draft only) |
 | POST | `/api/v1/admin/surveys/{id}/versions/{vid}/publish` | Archives the version it replaces |
@@ -290,10 +318,18 @@ stripe listen --forward-to localhost:8080/api/v1/webhooks/stripe
 | GET | `/api/v1/admin/orders` | Order history, newest first; `?status=PAID` is the packing queue (oldest first), `?status=FULFILLED` what has shipped |
 | GET | `/api/v1/admin/orders/{id}` | One order in full, whatever its status |
 | POST | `/api/v1/admin/orders/{id}/fulfill` | Mark shipped; 409 unless the order is `PAID` |
+| GET / PATCH | `/api/v1/admin/users` / `/api/v1/admin/users/{id}` | List / ban / reinstate |
+| POST | `/api/v1/admin/emails/broadcast` | Sends `{subject, body}` to every account with the email-chain opt-in set |
+| GET / POST | `/api/v1/admin/blog` | Every post incl. drafts, paginated; create a draft (slug derived from the title) |
+| PATCH / DELETE | `/api/v1/admin/blog/{id}` | Update or toggle published (in place — no versioning); DELETE really deletes, nothing else references a post |
+| GET | `/api/v1/admin/contact-messages` | The inbox, paginated, newest first |
+| PATCH | `/api/v1/admin/contact-messages/{id}/read` | Marks one read |
 
 Public: `/actuator/health`, `/docs/**`, `/v3/api-docs/**`, `/swagger-ui/**`, `GET` on the two
 catalog paths, and `POST /api/v1/webhooks/stripe`. `/api/v1/admin/**` requires `ROLE_ADMIN`.
-Everything else requires a valid JWT.
+Everything else — including the blog and contact endpoints — requires a valid JWT: "any signed-in
+user" for those, not a public signed-out visitor. There is still no public storefront or public
+blog; see the deploy-stage note on that decision.
 
 ---
 
@@ -342,12 +378,14 @@ intended safety net, not an obstacle.
 
 The tooling is built and holds nothing. Content arrives one of two ways:
 
-- **Through the editor.** Admin console → Surveys → New survey (or New draft on an existing one),
-  fill it in, publish. This is the intended route for content that will keep changing.
-- **As a migration.** A `V8__` file writing `survey` / `survey_version` / `survey_section` /
-  `question` / `question_option` rows, for content that should exist in every environment from a
-  clean database. The V6 placeholder copy is superseded by whichever route you pick — never by
-  editing V6.
+- **Through the editor.** Admin console → Surveys → New draft on the existing seeded survey for
+  that theme, fill it in, publish. (Creating a wholesale new survey isn't exposed in the UI right
+  now — see the theme-uniqueness note above; content replaces the seeded survey's version, it
+  doesn't get its own new survey row.)
+- **As a migration.** A `V13__` file (next available) writing `survey` / `survey_version` /
+  `survey_section` / `question` / `question_option` rows, for content that should exist in every
+  environment from a clean database. The V6 placeholder copy is superseded by whichever route you
+  pick — never by editing V6.
 
 Two things to settle before writing any of it:
 
@@ -382,6 +420,42 @@ second.
 **Adding partial fulfillment later** means a `shipment` table backfilled one row per fulfilled order
 from those columns. What would make that painful is code testing the raw columns, so read
 fulfillment state through `OrderStatus` — never `trackingNumber != null` at a call site.
+
+## What landed after Stage 7 (pre-Stage-8 hardening + Blog/Contact)
+
+Done while waiting on real survey content and the scoring rules — none of it needed either.
+
+**Order confirmation and shipped emails.** `OrderPaidEvent` / `OrderFulfilledEvent` publish from
+`PaymentEventApplier` / `FulfillmentService` at the exact moment each transition happens.
+`OrderEmailListener` consumes them `AFTER_COMMIT` (in its own `REQUIRES_NEW` transaction — Spring
+refuses any other propagation on a post-commit listener) so an email for a payment or fulfillment
+that then rolled back is never sent, and it swallows `EmailGateway` failures so a broken provider
+can't turn a successful webhook delivery or fulfillment request into an error response.
+
+**`DisplayRuleEvaluator` fails closed.** An unrecognized display-rule operator used to default to
+"condition satisfied" (question shows/required unconditionally); it now defaults to unmet (question
+stays hidden), logged as a warning. Matters most for the migration-authored survey-content path,
+which skips the admin editor's own validation. Fixed on both the backend and its frontend mirror
+(`displayRuleEngine.ts`).
+
+**Pagination.** `GET /api/v1/store/orders/me` and `GET /api/v1/admin/blog` /
+`GET /api/v1/admin/contact-messages` / `GET /api/v1/blog` all return `PageResponse<T>`
+(`common/PageResponse.java`) rather than a bare list — `page`/`size` query params, clamped
+server-side. `GET /api/v1/admin/orders` is still a bare list and due for the same treatment; it
+hasn't caused a problem yet only because order volume is still low.
+
+**Survey preview and the theme-uniqueness guard** — see the Frontend section above for both; they
+are documented there rather than repeated here.
+
+**Blog.** `V11__schema_blog.sql`. No versioning like a survey needs — nothing else references a
+post, so editing a published one changes it in place, and deleting one is a real delete rather than
+a deactivation. The slug is derived from the title server-side (`SlugGenerator`, dedup by suffixing
+`-2`, `-3`, ...) and never changes afterward. Any signed-in user can read published posts; only
+`ROLE_ADMIN` can write.
+
+**Contact.** `V12__schema_contact.sql`. A message is tied to the sender's account (no free-text
+name/email to fake), read by any `ROLE_ADMIN` via the inbox, marked read individually. No spam
+protection beyond requiring authentication, since the whole app already does.
 
 ## Deferred: the insight scoring engine
 

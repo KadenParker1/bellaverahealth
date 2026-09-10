@@ -5,6 +5,8 @@ const TABS = [
   { label: 'Products', to: '/admin/products' },
   { label: 'Fulfillment', to: '/admin/orders' },
   { label: 'Users', to: '/admin/users' },
+  { label: 'Blog', to: '/admin/blog' },
+  { label: 'Messages', to: '/admin/messages' },
 ] as const
 
 export function AdminLayout() {
@@ -12,7 +14,8 @@ export function AdminLayout() {
     <div>
       <h1 className="mb-1 text-2xl font-bold text-ink">Admin console</h1>
       <p className="mb-6 text-sm text-ink-muted">
-        Survey authoring, the product catalog, the shipping queue, and accounts.
+        Survey authoring, the product catalog, the shipping queue, accounts, the blog, and
+        messages sent through Contact.
       </p>
 
       <div className="mb-8 flex gap-1 border-b border-surface-border">

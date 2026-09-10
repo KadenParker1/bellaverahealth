@@ -11,4 +11,8 @@ public interface SurveyRepository extends JpaRepository<Survey, UUID> {
     List<Survey> findAllByOrderBySortOrderAscTitleAsc();
 
     boolean existsByCode(String code);
+
+    boolean existsByThemeAndActiveTrue(SurveyTheme theme);
+
+    boolean existsByThemeAndActiveTrueAndIdNot(SurveyTheme theme, UUID id);
 }

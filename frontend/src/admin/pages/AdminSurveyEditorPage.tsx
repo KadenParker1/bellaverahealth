@@ -20,6 +20,8 @@ import {
   type EditorQuestion,
   type EditorSection,
 } from '../surveyEditorState'
+import { toPreviewSurveyDetail } from '../surveyPreviewAdapter'
+import { SurveyRenderer } from '../../surveys/renderer/SurveyRenderer'
 
 const FIELD =
   'w-full rounded-lg border border-surface-border bg-white px-3 py-2 text-sm text-ink outline-none focus:border-magenta-500 disabled:bg-surface-subtle disabled:text-ink-muted'
@@ -70,6 +72,7 @@ function VersionEditor({
 
   const [sections, setSections] = useState<EditorSection[]>(() => toEditorSections(version))
   const [notes, setNotes] = useState(version.notes ?? '')
+  const [previewing, setPreviewing] = useState(false)
 
   const readOnly = version.status !== 'DRAFT'
   const codes = assignCodes(sections)
@@ -108,86 +111,112 @@ function VersionEditor({
           </p>
         </div>
 
-        {!readOnly && (
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            disabled={questionCount === 0}
+            onClick={() => setPreviewing((current) => !current)}
+          >
+            {previewing ? 'Back to editing' : 'Preview'}
+          </Button>
+          {!readOnly && !previewing && (
+            <>
+              <Button
+                variant="secondary"
+                disabled={save.isPending}
+                onClick={() => save.mutate({ notes: notes.trim() || undefined, sections: toSectionDtos(sections) })}
+              >
+                {save.isPending ? 'Saving…' : 'Save draft'}
+              </Button>
+              <Button disabled={publish.isPending || questionCount === 0} onClick={() => publish.mutate()}>
+                {publish.isPending ? 'Publishing…' : 'Publish'}
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={deleteDraft.isPending}
+                onClick={() =>
+                  deleteDraft.mutate({ surveyId, versionId }, { onSuccess: () => navigate('/admin/surveys') })
+                }
+              >
+                Delete draft
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {previewing && (
+        <Card className="p-6">
+          <p className="mb-6 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
+            Preview only - this is exactly what a user would see, but nothing here is saved or
+            submitted.
+          </p>
+          <SurveyRenderer
+            surveyDetail={toPreviewSurveyDetail(surveyId, versionId, toSectionDtos(sections))}
+            onSubmit={async () => {}}
+          />
+        </Card>
+      )}
+
+      {!previewing && (
+        <>
+          <div className="mb-6 space-y-3">
+            {save.error ? <ErrorBanner error={save.error} /> : null}
+            {publish.error ? <ErrorBanner error={publish.error} /> : null}
+            {deleteDraft.error ? <ErrorBanner error={deleteDraft.error} /> : null}
+            {save.isSuccess && !save.isPending && !save.error ? (
+              <p className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+                Draft saved. It isn’t live until you publish.
+              </p>
+            ) : null}
+          </div>
+
+          {!readOnly && (
+            <Card className="mb-6 p-6">
+              <label className="block text-sm">
+                <span className={LABEL}>Note to yourself about this version (optional)</span>
+                <input value={notes} onChange={(event) => setNotes(event.target.value)} className={FIELD} />
+                <span className={HINT}>Only ever shown here. People taking the survey never see it.</span>
+              </label>
+            </Card>
+          )}
+
+          <div className="space-y-6">
+            {sections.map((section, sectionIndex) => (
+              <SectionEditor
+                key={section.id}
+                section={section}
+                index={sectionIndex}
+                total={sections.length}
+                readOnly={readOnly}
+                codes={codes}
+                catalog={catalog}
+                onChange={(patch) => updateSection(sectionIndex, patch)}
+                onMove={(delta) => setSections((current) => move(current, sectionIndex, sectionIndex + delta))}
+                onRemove={() => setSections((current) => current.filter((_, i) => i !== sectionIndex))}
+              />
+            ))}
+          </div>
+
+          {sections.length === 0 && (
+            <Card className="p-10 text-center">
+              <p className="mb-1 text-sm text-ink">This survey is empty.</p>
+              <p className="text-sm text-ink-muted">
+                Add a section to group your questions — most surveys need only one.
+              </p>
+            </Card>
+          )}
+
+          {!readOnly && (
             <Button
               variant="secondary"
-              disabled={save.isPending}
-              onClick={() => save.mutate({ notes: notes.trim() || undefined, sections: toSectionDtos(sections) })}
+              className="mt-6"
+              onClick={() => setSections((current) => [...current, newSection(current.length)])}
             >
-              {save.isPending ? 'Saving…' : 'Save draft'}
+              Add section
             </Button>
-            <Button disabled={publish.isPending || questionCount === 0} onClick={() => publish.mutate()}>
-              {publish.isPending ? 'Publishing…' : 'Publish'}
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={deleteDraft.isPending}
-              onClick={() =>
-                deleteDraft.mutate({ surveyId, versionId }, { onSuccess: () => navigate('/admin/surveys') })
-              }
-            >
-              Delete draft
-            </Button>
-          </div>
-        )}
-      </div>
-
-      <div className="mb-6 space-y-3">
-        {save.error ? <ErrorBanner error={save.error} /> : null}
-        {publish.error ? <ErrorBanner error={publish.error} /> : null}
-        {deleteDraft.error ? <ErrorBanner error={deleteDraft.error} /> : null}
-        {save.isSuccess && !save.isPending && !save.error ? (
-          <p className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
-            Draft saved. It isn’t live until you publish.
-          </p>
-        ) : null}
-      </div>
-
-      {!readOnly && (
-        <Card className="mb-6 p-6">
-          <label className="block text-sm">
-            <span className={LABEL}>Note to yourself about this version (optional)</span>
-            <input value={notes} onChange={(event) => setNotes(event.target.value)} className={FIELD} />
-            <span className={HINT}>Only ever shown here. People taking the survey never see it.</span>
-          </label>
-        </Card>
-      )}
-
-      <div className="space-y-6">
-        {sections.map((section, sectionIndex) => (
-          <SectionEditor
-            key={section.id}
-            section={section}
-            index={sectionIndex}
-            total={sections.length}
-            readOnly={readOnly}
-            codes={codes}
-            catalog={catalog}
-            onChange={(patch) => updateSection(sectionIndex, patch)}
-            onMove={(delta) => setSections((current) => move(current, sectionIndex, sectionIndex + delta))}
-            onRemove={() => setSections((current) => current.filter((_, i) => i !== sectionIndex))}
-          />
-        ))}
-      </div>
-
-      {sections.length === 0 && (
-        <Card className="p-10 text-center">
-          <p className="mb-1 text-sm text-ink">This survey is empty.</p>
-          <p className="text-sm text-ink-muted">
-            Add a section to group your questions — most surveys need only one.
-          </p>
-        </Card>
-      )}
-
-      {!readOnly && (
-        <Button
-          variant="secondary"
-          className="mt-6"
-          onClick={() => setSections((current) => [...current, newSection(current.length)])}
-        >
-          Add section
-        </Button>
+          )}
+        </>
       )}
     </div>
   )

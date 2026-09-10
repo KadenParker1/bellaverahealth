@@ -6,6 +6,7 @@ import com.pm.bellavera.admin.api.AdminSectionDto;
 import com.pm.bellavera.admin.api.AdminSurveyDto;
 import com.pm.bellavera.admin.api.CreateSurveyRequest;
 import com.pm.bellavera.admin.api.SaveVersionContentRequest;
+import com.pm.bellavera.admin.api.UpdateSurveyRequest;
 import com.pm.bellavera.response.api.AnswerRequest;
 import com.pm.bellavera.response.api.SubmitResponseRequest;
 import com.pm.bellavera.support.AbstractIntegrationTest;
@@ -105,8 +106,16 @@ class ConditionalRequiredIntegrationTest extends AbstractIntegrationTest {
 
     // --- fixture -------------------------------------------------------------
 
-    /** A gate question, a follow-up required only when the gate says yes, and an optional note. */
+    /**
+     * A gate question, a follow-up required only when the gate says yes, and an optional note.
+     *
+     * <p>Themes are unique among active surveys, and every test in this class calls this method to
+     * create its own throwaway NUTRITION survey against the same shared Testcontainers database -
+     * so whatever currently holds that theme (the V6 seed, or an earlier test's leftover) has to be
+     * retired first, regardless of execution order.
+     */
     private UUID publishGatedSurvey() throws Exception {
+        retireActiveSurveyForTheme(SurveyTheme.NUTRITION);
         String code = "gated_" + UUID.randomUUID().toString().substring(0, 8);
 
         AdminSurveyDto survey = objectMapper.readValue(
@@ -156,5 +165,22 @@ class ConditionalRequiredIntegrationTest extends AbstractIntegrationTest {
 
     private RequestPostProcessor admin() {
         return JwtTestSupport.supabaseAdmin(adminId, adminId + "@example.com");
+    }
+
+    private void retireActiveSurveyForTheme(SurveyTheme theme) throws Exception {
+        AdminSurveyDto[] surveys = objectMapper.readValue(
+                mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/surveys").with(admin()))
+                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(),
+                AdminSurveyDto[].class);
+        for (AdminSurveyDto survey : surveys) {
+            if (survey.theme() == theme && survey.active()) {
+                mockMvc.perform(MockMvcRequestBuilders.patch("/api/v1/admin/surveys/" + survey.surveyId())
+                                .with(admin())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(
+                                        new UpdateSurveyRequest(null, null, null, false))))
+                        .andExpect(status().isOk());
+            }
+        }
     }
 }

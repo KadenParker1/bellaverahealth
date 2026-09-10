@@ -1,5 +1,7 @@
 import { apiClient } from '../lib/apiClient'
 import type {
+  AdminBlogPostDto,
+  AdminContactMessageDto,
   AdminOrderDto,
   AdminUserDto,
   AdminProductDto,
@@ -7,11 +9,14 @@ import type {
   AdminSurveyVersionDto,
   BroadcastEmailRequest,
   BroadcastEmailResult,
+  CreateBlogPostRequest,
   CreateProductRequest,
   CreateSurveyRequest,
   FulfillOrderRequest,
   OrderStatus,
+  PageResponse,
   SaveVersionContentRequest,
+  UpdateBlogPostRequest,
   UpdateProductRequest,
   UpdateSurveyRequest,
   UpdateUserStatusRequest,
@@ -81,3 +86,25 @@ export const updateUserStatus = (userId: string, body: UpdateUserStatusRequest) 
 /** Sends to every account with the email chain opt-in set. */
 export const broadcastEmail = (body: BroadcastEmailRequest) =>
   apiClient.post<BroadcastEmailResult>('/admin/emails/broadcast', body)
+
+// --- blog ---
+
+/** Every post, drafts included, newest first. */
+export const listAdminBlogPosts = (page: number, size: number) =>
+  apiClient.get<PageResponse<AdminBlogPostDto>>(`/admin/blog?page=${page}&size=${size}`)
+
+export const createBlogPost = (body: CreateBlogPostRequest) =>
+  apiClient.post<AdminBlogPostDto>('/admin/blog', body)
+
+export const updateBlogPost = (postId: string, body: UpdateBlogPostRequest) =>
+  apiClient.patch<AdminBlogPostDto>(`/admin/blog/${postId}`, body)
+
+export const deleteBlogPost = (postId: string) => apiClient.del<void>(`/admin/blog/${postId}`)
+
+// --- contact inbox ---
+
+export const listContactMessages = (page: number, size: number) =>
+  apiClient.get<PageResponse<AdminContactMessageDto>>(`/admin/contact-messages?page=${page}&size=${size}`)
+
+export const markContactMessageRead = (messageId: string) =>
+  apiClient.patch<AdminContactMessageDto>(`/admin/contact-messages/${messageId}/read`)

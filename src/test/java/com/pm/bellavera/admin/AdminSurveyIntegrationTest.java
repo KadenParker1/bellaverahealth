@@ -269,6 +269,37 @@ class AdminSurveyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void aSecondActiveSurveyCannotClaimAThemeAlreadyInUse() throws Exception {
+        // createSurvey() retires whatever currently holds HORMONES first, so this is guaranteed to
+        // be the theme's sole active occupant regardless of what other tests in this class left.
+        createSurvey(uniqueCode("occupant"), SurveyTheme.HORMONES, "Occupant");
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/surveys").with(admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CreateSurveyRequest(
+                                uniqueCode("collision"), SurveyTheme.HORMONES, "Collides", null, 0))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0]").value(org.hamcrest.Matchers.containsString("HORMONES")));
+    }
+
+    @Test
+    void restoringARetiredSurveyIsRefusedIfItsThemeIsNowTaken() throws Exception {
+        AdminSurveyDto first = createSurvey(uniqueCode("first"), SurveyTheme.PELVIC_FLOOR, "First");
+        patchJson("/api/v1/admin/surveys/" + first.surveyId(),
+                new UpdateSurveyRequest(null, null, null, false), AdminSurveyDto.class);
+
+        // Something else now holds the theme this retired survey used to occupy.
+        createSurvey(uniqueCode("second"), SurveyTheme.PELVIC_FLOOR, "Second");
+
+        mockMvc.perform(MockMvcRequestBuilders.patch("/api/v1/admin/surveys/" + first.surveyId())
+                        .with(admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new UpdateSurveyRequest(null, null, null, true))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void aRegularUserCannotAuthorSurveys() throws Exception {
         UUID userId = UUID.randomUUID();
         mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/surveys")
@@ -322,9 +353,26 @@ class AdminSurveyIntegrationTest extends AbstractIntegrationTest {
         return JwtTestSupport.supabaseAdmin(adminId, adminId + "@example.com");
     }
 
+    /**
+     * Themes are unique among active surveys, and this class deliberately creates throwaway
+     * survey after throwaway survey under the same real themes the V6 seed already occupies. The
+     * shared Testcontainers database persists across every test in the run, in whatever order they
+     * execute, so whatever currently holds the theme - the seed, or a previous test's leftover -
+     * is retired first rather than relying on test order.
+     */
     private AdminSurveyDto createSurvey(String code, SurveyTheme theme, String title) throws Exception {
+        retireActiveSurveyForTheme(theme);
         return postJson("/api/v1/admin/surveys", new CreateSurveyRequest(code, theme, title, null, 50),
                 AdminSurveyDto.class, status().isCreated());
+    }
+
+    private void retireActiveSurveyForTheme(SurveyTheme theme) throws Exception {
+        for (AdminSurveyDto survey : allSurveys()) {
+            if (survey.theme() == theme && survey.active()) {
+                patchJson("/api/v1/admin/surveys/" + survey.surveyId(),
+                        new UpdateSurveyRequest(null, null, null, false), AdminSurveyDto.class);
+            }
+        }
     }
 
     private <T> T postJson(String path, Object body, Class<T> type, ResultMatcher expected) throws Exception {

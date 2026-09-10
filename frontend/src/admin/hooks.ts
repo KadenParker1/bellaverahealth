@@ -3,11 +3,13 @@ import * as api from './api'
 import { productsQueryKey } from '../store/hooks'
 import type {
   BroadcastEmailRequest,
+  CreateBlogPostRequest,
   CreateProductRequest,
   CreateSurveyRequest,
   FulfillOrderRequest,
   OrderStatus,
   SaveVersionContentRequest,
+  UpdateBlogPostRequest,
   UpdateProductRequest,
   UpdateSurveyRequest,
   UpdateUserStatusRequest,
@@ -18,6 +20,9 @@ export const adminSurveysKey = ['admin', 'surveys'] as const
 export const adminProductsKey = ['admin', 'products'] as const
 export const adminOrdersKey = (status: OrderStatus | null) => ['admin', 'orders', status] as const
 export const adminUsersKey = (status: UserStatus | null) => ['admin', 'users', status] as const
+export const adminBlogPostsKey = (page: number, size: number) => ['admin', 'blog', page, size] as const
+export const adminContactMessagesKey = (page: number, size: number) =>
+  ['admin', 'contact-messages', page, size] as const
 export const adminVersionKey = (surveyId: string, versionId: string) =>
   ['admin', 'surveys', surveyId, 'versions', versionId] as const
 
@@ -173,5 +178,58 @@ export function useUpdateUserStatus() {
 export function useBroadcastEmail() {
   return useMutation({
     mutationFn: (body: BroadcastEmailRequest) => api.broadcastEmail(body),
+  })
+}
+
+// --- blog ---
+
+function invalidateBlog(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['admin', 'blog'] })
+  queryClient.invalidateQueries({ queryKey: ['blog', 'posts'] })
+}
+
+export function useAdminBlogPosts(page: number, size: number) {
+  return useQuery({ queryKey: adminBlogPostsKey(page, size), queryFn: () => api.listAdminBlogPosts(page, size) })
+}
+
+export function useCreateBlogPost() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateBlogPostRequest) => api.createBlogPost(body),
+    onSuccess: () => invalidateBlog(queryClient),
+  })
+}
+
+export function useUpdateBlogPost() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ postId, body }: { postId: string; body: UpdateBlogPostRequest }) =>
+      api.updateBlogPost(postId, body),
+    onSuccess: () => invalidateBlog(queryClient),
+  })
+}
+
+export function useDeleteBlogPost() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (postId: string) => api.deleteBlogPost(postId),
+    onSuccess: () => invalidateBlog(queryClient),
+  })
+}
+
+// --- contact inbox ---
+
+export function useContactMessages(page: number, size: number) {
+  return useQuery({
+    queryKey: adminContactMessagesKey(page, size),
+    queryFn: () => api.listContactMessages(page, size),
+  })
+}
+
+export function useMarkContactMessageRead() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (messageId: string) => api.markContactMessageRead(messageId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'contact-messages'] }),
   })
 }

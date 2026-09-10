@@ -9,7 +9,10 @@ import { HomePage } from './themes/pages/HomePage'
 import { ThemeDetailPage } from './themes/pages/ThemeDetailPage'
 import { LearnMorePage } from './themes/pages/LearnMorePage'
 import { ChatPage } from './chat/pages/ChatPage'
-import { AboutPage, BlogPage, ContactPage } from './content/pages/ContentPlaceholderPage'
+import { AboutPage } from './content/pages/AboutPage'
+import { ContactPage } from './contact/pages/ContactPage'
+import { BlogPage } from './blog/pages/BlogPage'
+import { BlogPostPage } from './blog/pages/BlogPostPage'
 import { StorePage } from './store/pages/StorePage'
 import { CartPage } from './store/pages/CartPage'
 import { OrderPage } from './store/pages/OrderPage'
@@ -21,6 +24,8 @@ import { AdminSurveyEditorPage } from './admin/pages/AdminSurveyEditorPage'
 import { AdminProductsPage } from './admin/pages/AdminProductsPage'
 import { AdminOrdersPage } from './admin/pages/AdminOrdersPage'
 import { AdminUsersPage } from './admin/pages/AdminUsersPage'
+import { AdminBlogPage } from './admin/pages/AdminBlogPage'
+import { AdminMessagesPage } from './admin/pages/AdminMessagesPage'
 import { ProtectedLayout } from './components/ui/ProtectedLayout'
 import { NotFoundPage } from './components/NotFoundPage'
 
@@ -62,6 +67,7 @@ export default function App() {
         <Route path="/about" element={<AboutPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/blog" element={<BlogPage />} />
+        <Route path="/blog/:slug" element={<BlogPostPage />} />
 
         {/* The catalog API allows anonymous reads; the SPA keeps the shop inside the
             authenticated shell for now, so the nav is the same everywhere. */}
@@ -85,6 +91,8 @@ export default function App() {
           <Route path="products" element={<AdminProductsPage />} />
           <Route path="orders" element={<AdminOrdersPage />} />
           <Route path="users" element={<AdminUsersPage />} />
+          <Route path="blog" element={<AdminBlogPage />} />
+          <Route path="messages" element={<AdminMessagesPage />} />
         </Route>
       </Route>
 
