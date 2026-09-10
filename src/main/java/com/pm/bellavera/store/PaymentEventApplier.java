@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,11 +31,14 @@ public class PaymentEventApplier {
 
     private final CustomerOrderRepository customerOrderRepository;
     private final PaymentEventRepository paymentEventRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PaymentEventApplier(CustomerOrderRepository customerOrderRepository,
-                                PaymentEventRepository paymentEventRepository) {
+                                PaymentEventRepository paymentEventRepository,
+                                ApplicationEventPublisher eventPublisher) {
         this.customerOrderRepository = customerOrderRepository;
         this.paymentEventRepository = paymentEventRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -90,6 +94,7 @@ public class PaymentEventApplier {
                     .build());
         }
         log.info("Order {} is paid and awaiting fulfillment", order.getId());
+        eventPublisher.publishEvent(new OrderPaidEvent(order.getId()));
     }
 
     private void markCancelled(CustomerOrder order) {

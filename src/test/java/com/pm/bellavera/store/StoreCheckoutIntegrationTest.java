@@ -253,6 +253,50 @@ class StoreCheckoutIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.errors[0]").value("Out of stock: " + code));
     }
 
+    /**
+     * The documented trade-off: nothing is reserved until a payment lands, so two checkouts can
+     * both see the last unit as available and both go on to pay. Nothing here prevents that - the
+     * invariant that must hold is downstream, at fulfillment: shipping both must not drive stock
+     * negative, and neither shipment may be blocked by the other having already claimed the unit.
+     */
+    @Test
+    void twoOrdersRacingForTheLastUnitCanBothBePaidAndFulfillmentClampsStockAtZero() throws Exception {
+        String code = uniqueCode("lastunit");
+        createProduct(code, "Only one left", 4000, 1);
+
+        UUID firstId = UUID.randomUUID();
+        UUID secondId = UUID.randomUUID();
+        RequestPostProcessor first = JwtTestSupport.supabaseUser(firstId, firstId + "@example.com");
+        RequestPostProcessor second = JwtTestSupport.supabaseUser(secondId, secondId + "@example.com");
+
+        // Neither order is PAID yet, so both checkouts see the single unit as available.
+        CheckoutSessionDto sessionA = startCheckout(first, code, 1);
+        CheckoutSessionDto sessionB = startCheckout(second, code, 1);
+
+        // Both webhooks land - a real race would arrive concurrently; the outcome is the same
+        // either way, since nothing here serializes on the product row.
+        payFor(sessionA.orderId());
+        payFor(sessionB.orderId());
+
+        assertThat(getOrder(first, sessionA.orderId()).status()).isEqualTo(OrderStatus.PAID);
+        assertThat(getOrder(second, sessionB.orderId()).status()).isEqualTo(OrderStatus.PAID);
+
+        // Both are on the packing queue despite only one physical unit existing.
+        assertThat(orderIds("?status=PAID")).contains(sessionA.orderId(), sessionB.orderId());
+
+        fulfill(sessionA.orderId());
+        assertThat(adminProduct(code).stockQuantity()).isEqualTo(0);
+
+        // Shipping the second is not blocked by the first having already taken the only unit -
+        // fulfillment gates on order status, not physical stock - and the count clamps at zero
+        // rather than going negative.
+        fulfill(sessionB.orderId());
+        assertThat(adminProduct(code).stockQuantity()).isEqualTo(0);
+
+        assertThat(getOrder(first, sessionA.orderId()).status()).isEqualTo(OrderStatus.FULFILLED);
+        assertThat(getOrder(second, sessionB.orderId()).status()).isEqualTo(OrderStatus.FULFILLED);
+    }
+
     @Test
     void anUntrackedProductIsAlwaysAvailableAndNeverDecremented() throws Exception {
         String code = uniqueCode("unlimited");

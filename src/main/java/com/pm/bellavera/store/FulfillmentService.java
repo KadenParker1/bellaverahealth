@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,13 +33,16 @@ public class FulfillmentService {
     private final CustomerOrderRepository customerOrderRepository;
     private final InventoryService inventoryService;
     private final AuditService auditService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public FulfillmentService(CustomerOrderRepository customerOrderRepository,
                                InventoryService inventoryService,
-                               AuditService auditService) {
+                               AuditService auditService,
+                               ApplicationEventPublisher eventPublisher) {
         this.customerOrderRepository = customerOrderRepository;
         this.inventoryService = inventoryService;
         this.auditService = auditService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -104,6 +108,8 @@ public class FulfillmentService {
                         item -> item.getQuantity() + " -> " + item.getProduct().getStockQuantity() + " left")));
         auditService.record(admin, AUDIT_ACTION_FULFILL, AUDIT_ENTITY_TYPE, order.getId(),
                 Map.of("status", OrderStatus.PAID.name()), after);
+
+        eventPublisher.publishEvent(new OrderFulfilledEvent(order.getId()));
 
         return AdminOrderDto.from(order);
     }
