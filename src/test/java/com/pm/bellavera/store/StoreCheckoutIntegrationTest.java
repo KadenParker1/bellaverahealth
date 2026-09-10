@@ -2,6 +2,9 @@ package com.pm.bellavera.store;
 
 import com.pm.bellavera.admin.api.AdminProductDto;
 import com.pm.bellavera.admin.api.CreateProductRequest;
+import com.pm.bellavera.common.PageResponse;
+import com.pm.bellavera.email.EmailGateway;
+import com.pm.bellavera.email.EmailMessage;
 import com.pm.bellavera.store.api.AdminOrderDto;
 import com.pm.bellavera.store.api.CheckoutItemRequest;
 import com.pm.bellavera.store.api.CheckoutRequest;
@@ -14,8 +17,14 @@ import com.pm.bellavera.support.JwtTestSupport;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
@@ -30,6 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * The whole store path against the mock payment gateway: catalog, checkout, the payment webhook
  * that is the only thing allowed to mark an order paid, and fulfillment.
  */
+@Import(StoreCheckoutIntegrationTest.RecordingEmailConfig.class)
 class StoreCheckoutIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
@@ -38,7 +48,15 @@ class StoreCheckoutIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private RecordingEmailGateway recordingEmailGateway;
+
     private final UUID adminId = UUID.randomUUID();
+
+    @BeforeEach
+    void clearRecordedEmails() {
+        recordingEmailGateway.sent().clear();
+    }
 
     @Test
     void aProductCanBeBoughtPaidForAndShipped() throws Exception {
@@ -84,6 +102,10 @@ class StoreCheckoutIntegrationTest extends AbstractIntegrationTest {
         assertThat(paid.shipTo()).isNotNull();
         assertThat(paid.shipTo().city()).isEqualTo("Boulder");
 
+        // Getting paid triggers the order-confirmation email.
+        assertThat(recordingEmailGateway.sent())
+                .anyMatch(m -> m.to().equals("buyer@example.com") && m.subject().contains("confirmed"));
+
         // It is now on the fulfillment queue.
         List<AdminOrderDto> queue = readList(
                 mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/orders?status=PAID").with(admin()))
@@ -102,6 +124,10 @@ class StoreCheckoutIntegrationTest extends AbstractIntegrationTest {
         assertThat(fulfilled.status()).isEqualTo(OrderStatus.FULFILLED);
         assertThat(fulfilled.fulfilledAt()).isNotNull();
         assertThat(fulfilled.trackingNumber()).isEqualTo("9400111899223");
+
+        // Shipping triggers the shipped email, tracking number included.
+        assertThat(recordingEmailGateway.sent())
+                .anyMatch(m -> m.subject().contains("shipped") && m.body().contains("9400111899223"));
 
         // A second click cannot re-ship it or overwrite the shipment.
         mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/orders/{id}/fulfill", session.orderId())
@@ -298,6 +324,29 @@ class StoreCheckoutIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void myOrdersAreReturnedPagedNewestFirst() throws Exception {
+        String code = uniqueCode("paged");
+        createProduct(code, "Paged item", 500);
+
+        UUID userId = UUID.randomUUID();
+        RequestPostProcessor user = JwtTestSupport.supabaseUser(userId, userId + "@example.com");
+        UUID first = startCheckout(user, code, 1).orderId();
+        UUID second = startCheckout(user, code, 1).orderId();
+        UUID third = startCheckout(user, code, 1).orderId();
+
+        PageResponse<OrderDto> pageOne = readOrdersPage(user, 0, 2);
+        assertThat(pageOne.content()).hasSize(2);
+        assertThat(pageOne.totalElements()).isEqualTo(3);
+        assertThat(pageOne.totalPages()).isEqualTo(2);
+        // Newest first, so the most recently placed order (third) leads.
+        assertThat(pageOne.content().get(0).id()).isEqualTo(third);
+
+        PageResponse<OrderDto> pageTwo = readOrdersPage(user, 1, 2);
+        assertThat(pageTwo.content()).singleElement().satisfies(o -> assertThat(o.id()).isEqualTo(first));
+        assertThat(pageTwo.totalPages()).isEqualTo(2);
+    }
+
+    @Test
     void anUntrackedProductIsAlwaysAvailableAndNeverDecremented() throws Exception {
         String code = uniqueCode("unlimited");
         AdminProductDto product = createProduct(code, "Made to order", 700, null);
@@ -472,5 +521,42 @@ class StoreCheckoutIntegrationTest extends AbstractIntegrationTest {
 
     private <T> List<T> readList(String json, Class<T[]> arrayType) {
         return List.of(objectMapper.readValue(json, arrayType));
+    }
+
+    private PageResponse<OrderDto> readOrdersPage(RequestPostProcessor user, int page, int size) throws Exception {
+        String json = mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/store/orders/me")
+                        .param("page", String.valueOf(page))
+                        .param("size", String.valueOf(size))
+                        .with(user))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        return objectMapper.readValue(json,
+                objectMapper.getTypeFactory().constructParametricType(PageResponse.class, OrderDto.class));
+    }
+
+    /** Captures every send instead of actually sending anything, so tests can assert on it. */
+    static class RecordingEmailGateway implements EmailGateway {
+        private final List<EmailMessage> sent = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void send(EmailMessage message) {
+            sent.add(message);
+        }
+
+        List<EmailMessage> sent() {
+            return sent;
+        }
+    }
+
+    @TestConfiguration
+    static class RecordingEmailConfig {
+        // Named distinctly from EmailConfig#emailGateway - Spring rejects two bean definitions
+        // sharing a name outright, before @Primary ever gets a say in which one wins. Declared to
+        // return the concrete type (not EmailGateway) so autowiring RecordingEmailGateway directly
+        // - to reach its recorded messages - resolves statically, not just at runtime.
+        @Bean
+        @Primary
+        RecordingEmailGateway recordingEmailGatewayBean() {
+            return new RecordingEmailGateway();
+        }
     }
 }

@@ -1,10 +1,11 @@
 package com.pm.bellavera.store;
 
 import com.pm.bellavera.common.NotFoundException;
+import com.pm.bellavera.common.PageResponse;
 import com.pm.bellavera.store.api.OrderDto;
 import com.pm.bellavera.user.AppUser;
-import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,10 +20,10 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public List<OrderDto> listForUser(AppUser user) {
-        return customerOrderRepository.findByUserIdOrderByPlacedAtDesc(user.getId()).stream()
-                .map(OrderDto::from)
-                .toList();
+    public PageResponse<OrderDto> listForUser(AppUser user, Pageable pageable) {
+        return PageResponse.of(customerOrderRepository
+                .findByUserIdOrderByPlacedAtDesc(user.getId(), pageable)
+                .map(OrderDto::from));
     }
 
     /**

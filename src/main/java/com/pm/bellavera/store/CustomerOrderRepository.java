@@ -3,13 +3,15 @@ package com.pm.bellavera.store;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, UUID> {
 
-    List<CustomerOrder> findByUserIdOrderByPlacedAtDesc(UUID userId);
+    Page<CustomerOrder> findByUserIdOrderByPlacedAtDesc(UUID userId, Pageable pageable);
 
     /** Items eagerly fetched - for building an order email once the placing transaction has closed. */
     @Query("select o from CustomerOrder o left join fetch o.items where o.id = :id")

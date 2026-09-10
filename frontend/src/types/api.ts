@@ -400,6 +400,14 @@ export interface SaveVersionContentRequest {
   sections: AdminSectionDto[]
 }
 
+export interface PageResponse<T> {
+  content: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
 export interface ProblemDetail {
   type?: string
   title?: string

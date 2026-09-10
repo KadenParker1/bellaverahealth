@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
 import { Button } from '../../components/ui/Button'
@@ -8,10 +9,18 @@ import { useMe, useUpdateMe } from '../../profile/hooks'
 import { OrderSummary } from '../../store/components/OrderSummary'
 import { useMyOrders } from '../../store/hooks'
 
+const ORDERS_PER_PAGE = 5
+
 export function MyAccountPage() {
   const { signOut } = useAuth()
   const { data: me, isLoading: meLoading, error: meError } = useMe()
-  const { data: orders, isLoading: ordersLoading, error: ordersError } = useMyOrders()
+  const [ordersPage, setOrdersPage] = useState(0)
+  const {
+    data: ordersPageResult,
+    isLoading: ordersLoading,
+    error: ordersError,
+  } = useMyOrders(ordersPage, ORDERS_PER_PAGE)
+  const orders = ordersPageResult?.content
   const updateMe = useUpdateMe()
 
   return (
@@ -102,6 +111,28 @@ export function MyAccountPage() {
               <OrderSummary order={order} />
             </Card>
           ))}
+        </div>
+      )}
+
+      {ordersPageResult && ordersPageResult.totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-center gap-3">
+          <Button
+            variant="ghost"
+            disabled={ordersPage === 0}
+            onClick={() => setOrdersPage((page) => page - 1)}
+          >
+            Previous
+          </Button>
+          <span className="text-sm text-ink-muted">
+            Page {ordersPage + 1} of {ordersPageResult.totalPages}
+          </span>
+          <Button
+            variant="ghost"
+            disabled={ordersPage + 1 >= ordersPageResult.totalPages}
+            onClick={() => setOrdersPage((page) => page + 1)}
+          >
+            Next
+          </Button>
         </div>
       )}
     </div>
