@@ -23,8 +23,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header>
         <div className="border-b border-surface-border bg-surface">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 md:px-10">
-            <Link to="/" className="text-lg font-bold tracking-tight text-magenta-600">
-              Bellavera
+            <Link to="/" className="flex items-baseline gap-3">
+              <span className="text-lg font-bold tracking-tight text-magenta-600">Bellavera</span>
+              <span className="hidden text-xs italic tracking-wide text-ink-muted sm:inline">
+                The beautiful truth about your body
+              </span>
             </Link>
             <div className="flex items-center gap-4">
               <Link to="/chat" className="text-sm font-medium text-ink hover:text-magenta-600">

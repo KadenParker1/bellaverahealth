@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../useAuth'
+import { AuthLayout } from '../components/AuthLayout'
 import { Card } from '../../components/ui/Card'
 import { TextField } from '../../components/ui/TextField'
 import { Button } from '../../components/ui/Button'
@@ -31,8 +32,8 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface-subtle px-6">
-      <Card className="w-full max-w-sm p-8">
+    <AuthLayout>
+      <Card className="w-full max-w-sm p-8 shadow-lg">
         <h1 className="mb-1 text-xl font-bold text-ink">Welcome back</h1>
         <p className="mb-6 text-sm text-ink-muted">Sign in to continue to Bellavera.</p>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -66,6 +67,6 @@ export function LoginPage() {
           </Link>
         </p>
       </Card>
-    </div>
+    </AuthLayout>
   )
 }

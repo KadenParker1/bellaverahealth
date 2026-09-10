@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../useAuth'
+import { AuthLayout } from '../components/AuthLayout'
 import { Card } from '../../components/ui/Card'
 import { TextField } from '../../components/ui/TextField'
 import { Button } from '../../components/ui/Button'
@@ -51,21 +52,21 @@ export function SignupPage() {
 
   if (confirmationSent) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-surface-subtle px-6">
-        <Card className="w-full max-w-sm p-8 text-center">
+      <AuthLayout>
+        <Card className="w-full max-w-sm p-8 text-center shadow-lg">
           <h1 className="mb-2 text-xl font-bold text-ink">Check your email</h1>
           <p className="text-sm text-ink-muted">
             We sent a confirmation link to <strong>{email}</strong>. Confirm your email to finish
             creating your account.
           </p>
         </Card>
-      </div>
+      </AuthLayout>
     )
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface-subtle px-6">
-      <Card className="w-full max-w-sm p-8">
+    <AuthLayout>
+      <Card className="w-full max-w-sm p-8 shadow-lg">
         <h1 className="mb-1 text-xl font-bold text-ink">Create your account</h1>
         <p className="mb-6 text-sm text-ink-muted">Start your personalized health journey.</p>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -110,6 +111,6 @@ export function SignupPage() {
           </Link>
         </p>
       </Card>
-    </div>
+    </AuthLayout>
   )
 }
