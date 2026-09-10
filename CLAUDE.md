@@ -128,6 +128,12 @@ provider SDK type crosses it. Swapping providers = add an adapter class + a bran
 takes no money and verifies nothing, which is what makes the whole store flow testable offline;
 `PaymentConfig` refuses it under the `prod` profile.
 
+**The email boundary is a port too.** `EmailGateway.send(EmailMessage)` — one method, no provider
+SDK type crosses it. `MockEmailGateway` logs instead of sending; `EmailConfig` throws for any
+provider name other than `mock`, same shape as `LlmConfig`. Nothing has flipped this to a real
+provider yet — order-confirmation/shipped emails and the admin broadcast all go through it, and all
+of them are exercisable offline today.
+
 **Only a verified webhook marks an order paid.** Checkout creates a `PENDING` order and hands back
 a URL. `PaymentApplicationService` is the only thing that writes `PAID`, and it is idempotent twice
 over: `payment_event`'s primary key rejects a redelivered event, and each transition re-checks the
@@ -283,6 +289,14 @@ stripe listen --forward-to localhost:8080/api/v1/webhooks/stripe
   the resource-server DSL can start, since `MockMvc`'s `jwt()` post-processor injects the security
   context directly
 - `prod` — every value from an env var; see `.env.example`
+
+### CI
+
+`.github/workflows/ci.yml` runs on every push and PR against `master`: `./mvnw test` (backend,
+needs Docker on the runner for Testcontainers — GitHub's `ubuntu-latest` ships one) and
+`npm ci && npm run build && npm run lint` (frontend). No secrets are configured or needed — the
+test profile always uses the mock LLM/payment/email adapters regardless of what `prod` is
+configured to use, so wiring a real provider later has zero effect on what CI runs.
 
 ---
 
@@ -451,7 +465,9 @@ are documented there rather than repeated here.
 post, so editing a published one changes it in place, and deleting one is a real delete rather than
 a deactivation. The slug is derived from the title server-side (`SlugGenerator`, dedup by suffixing
 `-2`, `-3`, ...) and never changes afterward. Any signed-in user can read published posts; only
-`ROLE_ADMIN` can write.
+`ROLE_ADMIN` can write. Text only — no image field. Deliberately deferred: adding one means deciding
+between an `imageUrl` string (matches how `Product.imageUrl` already works, zero new infra) or a
+real upload (needs Supabase Storage, which local dev currently excludes since nothing uses it).
 
 **Contact.** `V12__schema_contact.sql`. A message is tied to the sender's account (no free-text
 name/email to fake), read by any `ROLE_ADMIN` via the inbox, marked read individually. No spam
