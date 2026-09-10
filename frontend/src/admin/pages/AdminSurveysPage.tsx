@@ -1,12 +1,10 @@
-import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { Spinner } from '../../components/ui/Spinner'
 import type { AdminSurveyDto, SurveyTheme, SurveyVersionStatus } from '../../types/api'
-import { useAdminSurveys, useCreateDraft, useCreateSurvey, useUpdateSurvey } from '../hooks'
-import { slugify } from '../surveyEditorState'
+import { useAdminSurveys, useCreateDraft, useUpdateSurvey } from '../hooks'
 
 /** The five themes the schema allows, in the words the app uses for them. */
 const THEMES: { value: SurveyTheme; label: string }[] = [
@@ -31,23 +29,17 @@ const STATUS_STYLES: Record<SurveyVersionStatus, string> = {
 
 export function AdminSurveysPage() {
   const { data: surveys, isLoading, error } = useAdminSurveys()
-  const [creating, setCreating] = useState(false)
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-ink">Surveys</h2>
-          <p className="text-sm text-ink-muted">
-            Published versions are immutable — editing a live survey means starting a new draft.
-          </p>
-        </div>
-        <Button onClick={() => setCreating((current) => !current)}>
-          {creating ? 'Close' : 'New survey'}
-        </Button>
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-ink">Surveys</h2>
+        <p className="text-sm text-ink-muted">
+          Published versions are immutable — editing a live survey means starting a new draft.
+          Add content to a survey with "New draft" on its card below; creating a brand-new survey
+          isn't available here for now, since it can only ever be for one of the five fixed themes.
+        </p>
       </div>
-
-      {creating && <CreateSurveyCard onDone={() => setCreating(false)} />}
 
       {error ? <ErrorBanner error={error} /> : null}
       {isLoading && (
@@ -56,7 +48,7 @@ export function AdminSurveysPage() {
         </div>
       )}
 
-      {surveys && surveys.length === 0 && !creating && (
+      {surveys && surveys.length === 0 && (
         <Card className="p-10 text-center">
           <p className="text-sm text-ink-muted">No surveys yet.</p>
         </Card>
@@ -68,101 +60,6 @@ export function AdminSurveysPage() {
         ))}
       </div>
     </div>
-  )
-}
-
-function CreateSurveyCard({ onDone }: { onDone: () => void }) {
-  const createSurvey = useCreateSurvey()
-  const [theme, setTheme] = useState<SurveyTheme>('EXERCISE')
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-
-  // The code is an identifier, not a decision: derived from the title, never typed. It is
-  // permanent once created, which is why it is shown rather than hidden entirely.
-  const code = slugify(title)
-
-  const field =
-    'w-full rounded-lg border border-surface-border bg-white px-3 py-2 text-sm text-ink outline-none focus:border-magenta-500'
-
-  const onSubmit = (event: FormEvent) => {
-    event.preventDefault()
-    if (!code) return
-    createSurvey.mutate(
-      { code, theme, title: title.trim(), description: description.trim() || undefined },
-      { onSuccess: onDone },
-    )
-  }
-
-  return (
-    <Card className="mb-6 p-6">
-      <h3 className="mb-1 text-base font-semibold text-ink">New survey</h3>
-      <p className="mb-4 text-xs text-ink-muted">
-        Creates the survey and an empty first draft for you to fill in. Nothing is visible to
-        anyone until you publish it.
-      </p>
-      <form onSubmit={onSubmit} className="space-y-4">
-        {createSurvey.error ? <ErrorBanner error={createSurvey.error} /> : null}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs font-medium text-ink-muted">Name</span>
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              required
-              placeholder="Sleep quality"
-              className={field}
-            />
-            {title.trim() !== '' && (
-              <span className="mt-1 block text-xs text-ink-muted">
-                {code ? (
-                  <>
-                    Identifier: <code className="text-ink">{code}</code> — set automatically and
-                    permanent, so answers stay matched to this survey as you revise it.
-                  </>
-                ) : (
-                  <span className="text-red-600">
-                    Please include some letters or numbers in the name.
-                  </span>
-                )}
-              </span>
-            )}
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs font-medium text-ink-muted">Health area</span>
-            <select
-              value={theme}
-              onChange={(event) => setTheme(event.target.value as SurveyTheme)}
-              className={field}
-            >
-              {THEMES.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <label className="block text-sm">
-          <span className="mb-1 block text-xs font-medium text-ink-muted">
-            Short description (optional)
-          </span>
-          <textarea
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            rows={2}
-            className={field}
-          />
-        </label>
-        <div className="flex gap-3">
-          <Button type="submit" disabled={createSurvey.isPending || !code}>
-            {createSurvey.isPending ? 'Creating…' : 'Create survey'}
-          </Button>
-          <Button type="button" variant="secondary" onClick={onDone}>
-            Cancel
-          </Button>
-        </div>
-      </form>
-    </Card>
   )
 }
 
