@@ -179,6 +179,13 @@ function PostCard({
           <ErrorBanner error={deletePost.error} />
         </div>
       ) : null}
+      {/* The publish/unpublish toggle lives outside the edit form, so its failures need their
+          own banner - the form's `error` prop only covers a save made while editing. */}
+      {updatePost.error ? (
+        <div className="mt-3">
+          <ErrorBanner error={updatePost.error} />
+        </div>
+      ) : null}
     </Card>
   )
 }

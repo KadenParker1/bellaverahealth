@@ -3,6 +3,7 @@ package com.pm.bellavera.store;
 import com.pm.bellavera.audit.AuditService;
 import com.pm.bellavera.common.ConflictException;
 import com.pm.bellavera.common.NotFoundException;
+import com.pm.bellavera.common.PageResponse;
 import com.pm.bellavera.store.api.AdminOrderDto;
 import com.pm.bellavera.store.api.FulfillOrderRequest;
 import com.pm.bellavera.user.AppUser;
@@ -12,6 +13,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,20 +50,21 @@ public class FulfillmentService {
 
     /**
      * Order history. A null status means every order, newest first; a status narrows it - which is
-     * how the console's Fulfilled tab reads back what has already shipped.
+     * how the console's Fulfilled tab reads back what has already shipped. Paged, because this list
+     * grows for the life of the store and nothing else bounds it.
      */
     @Transactional(readOnly = true)
-    public List<AdminOrderDto> list(OrderStatus status) {
+    public PageResponse<AdminOrderDto> list(OrderStatus status, Pageable pageable) {
+        Page<CustomerOrder> orders;
         if (status == null) {
-            return customerOrderRepository.findByOrderByPlacedAtDesc().stream()
-                    .map(AdminOrderDto::from)
-                    .toList();
+            orders = customerOrderRepository.findByOrderByPlacedAtDesc(pageable);
+        } else {
+            // The queue is packed oldest-first; history reads newest-first.
+            orders = status == OrderStatus.PAID
+                    ? customerOrderRepository.findByStatusOrderByPlacedAtAsc(status, pageable)
+                    : customerOrderRepository.findByStatusOrderByPlacedAtDesc(status, pageable);
         }
-        // The queue is packed oldest-first; history reads newest-first.
-        List<CustomerOrder> orders = status == OrderStatus.PAID
-                ? customerOrderRepository.findByStatusOrderByPlacedAtAsc(status)
-                : customerOrderRepository.findByStatusOrderByPlacedAtDesc(status);
-        return orders.stream().map(AdminOrderDto::from).toList();
+        return PageResponse.of(orders.map(AdminOrderDto::from));
     }
 
     @Transactional(readOnly = true)

@@ -15,8 +15,7 @@ console) is built and tested. Beyond that, this round of work (post-Stage-7, pre
 - **`DisplayRuleEvaluator` fail-closed fix** — an unrecognized display-rule operator used to default
   to "visible"; now defaults to hidden. Fixed on both backend and its frontend mirror.
 - **Pagination** — `PageResponse<T>` pattern, applied to user order history, blog list, and the
-  contact inbox. **Not yet applied to `GET /api/v1/admin/orders`** — still a bare list, on borrowed
-  time as order volume grows.
+  contact inbox, and (since the codebase-wide scan) `GET /api/v1/admin/orders`.
 - **Survey theme-uniqueness guard** — `V10`, a partial unique index plus a service-level check.
   Fixes the real bug that happened: two active surveys sharing a theme, one with no published
   version, silently winning the home-page slot. "New survey" is hidden from the admin UI on
@@ -53,7 +52,10 @@ These come up repeatedly and are worth resolving deliberately rather than by def
 
 ## Known gaps / tech debt (not urgent, just real)
 
-- `AdminOrderController.list()` unpaginated (see above).
+- `SurveyQueryService.listActiveForUser` runs 1 + 2N queries on the home page (per survey: a
+  published-version lookup and a submitted-response lookup). Left as-is deliberately: N is bounded
+  at ~4 by the fixed theme model, so the fix would be churn for no measurable gain. Revisit only if
+  themes ever become dynamic — at that point N stops being bounded and this becomes real.
 - `ChatRateLimiter` is in-memory, single-instance only — fine today, a real limit the moment this
   ever runs on more than one Railway replica.
 - No security review pass has been done yet (there's a `security-review` skill for this).

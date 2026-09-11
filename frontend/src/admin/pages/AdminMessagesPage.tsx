@@ -33,6 +33,11 @@ export function AdminMessagesPage() {
       </div>
 
       {error ? <ErrorBanner error={error} /> : null}
+      {markRead.error ? (
+        <div className="mb-4">
+          <ErrorBanner error={markRead.error} />
+        </div>
+      ) : null}
       {isLoading && (
         <div className="flex justify-center py-16">
           <Spinner className="h-8 w-8" />

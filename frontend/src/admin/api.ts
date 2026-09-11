@@ -65,8 +65,10 @@ export const deactivateProduct = (productId: string) =>
 // --- orders ---
 
 /** No status means the full history, newest first. `PAID` is the packing queue, oldest first. */
-export const listAdminOrders = (status: OrderStatus | null) =>
-  apiClient.get<AdminOrderDto[]>(`/admin/orders${status ? `?status=${status}` : ''}`)
+export const listAdminOrders = (status: OrderStatus | null, page: number, size: number) =>
+  apiClient.get<PageResponse<AdminOrderDto>>(
+    `/admin/orders?page=${page}&size=${size}${status ? `&status=${status}` : ''}`,
+  )
 
 export const fulfillOrder = (orderId: string, body: FulfillOrderRequest) =>
   apiClient.post<AdminOrderDto>(`/admin/orders/${orderId}/fulfill`, body)

@@ -107,11 +107,7 @@ class StoreCheckoutIntegrationTest extends AbstractIntegrationTest {
                 .anyMatch(m -> m.to().equals("buyer@example.com") && m.subject().contains("confirmed"));
 
         // It is now on the fulfillment queue.
-        List<AdminOrderDto> queue = readList(
-                mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/orders?status=PAID").with(admin()))
-                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(),
-                AdminOrderDto[].class);
-        assertThat(queue).anyMatch(order -> order.id().equals(session.orderId()));
+        assertThat(adminOrders(OrderStatus.PAID)).anyMatch(order -> order.id().equals(session.orderId()));
 
         AdminOrderDto fulfilled = objectMapper.readValue(
                 mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/admin/orders/{id}/fulfill", session.orderId())
@@ -137,11 +133,7 @@ class StoreCheckoutIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isConflict());
 
         // And it has left the queue.
-        List<AdminOrderDto> queueAfter = readList(
-                mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/orders?status=PAID").with(admin()))
-                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(),
-                AdminOrderDto[].class);
-        assertThat(queueAfter).noneMatch(order -> order.id().equals(session.orderId()));
+        assertThat(adminOrders(OrderStatus.PAID)).noneMatch(order -> order.id().equals(session.orderId()));
     }
 
     @Test
@@ -308,7 +300,7 @@ class StoreCheckoutIntegrationTest extends AbstractIntegrationTest {
         assertThat(getOrder(second, sessionB.orderId()).status()).isEqualTo(OrderStatus.PAID);
 
         // Both are on the packing queue despite only one physical unit existing.
-        assertThat(orderIds("?status=PAID")).contains(sessionA.orderId(), sessionB.orderId());
+        assertThat(orderIds(OrderStatus.PAID)).contains(sessionA.orderId(), sessionB.orderId());
 
         fulfill(sessionA.orderId());
         assertThat(adminProduct(code).stockQuantity()).isEqualTo(0);
@@ -378,9 +370,9 @@ class StoreCheckoutIntegrationTest extends AbstractIntegrationTest {
         CheckoutSessionDto waiting = startCheckout(user, code, 1);
         payFor(waiting.orderId());
 
-        assertThat(orderIds("?status=PAID")).contains(waiting.orderId()).doesNotContain(shipped.orderId());
-        assertThat(orderIds("?status=FULFILLED")).contains(shipped.orderId()).doesNotContain(waiting.orderId());
-        assertThat(orderIds("")).contains(shipped.orderId(), waiting.orderId());
+        assertThat(orderIds(OrderStatus.PAID)).contains(waiting.orderId()).doesNotContain(shipped.orderId());
+        assertThat(orderIds(OrderStatus.FULFILLED)).contains(shipped.orderId()).doesNotContain(waiting.orderId());
+        assertThat(orderIds(null)).contains(shipped.orderId(), waiting.orderId());
 
         // The shipped order still reads back in full, stock drawdown and all.
         AdminOrderDto detail = objectMapper.readValue(
@@ -513,10 +505,23 @@ class StoreCheckoutIntegrationTest extends AbstractIntegrationTest {
                 .content(objectMapper.writeValueAsString(payload)));
     }
 
-    private List<UUID> orderIds(String query) throws Exception {
-        return readList(mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/admin/orders" + query).with(admin()))
-                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(),
-                AdminOrderDto[].class).stream().map(AdminOrderDto::id).toList();
+    private List<UUID> orderIds(OrderStatus status) throws Exception {
+        return adminOrders(status).stream().map(AdminOrderDto::id).toList();
+    }
+
+    /**
+     * The admin list is paged. Every test here asserts on an order it just created, and the shared
+     * database accumulates orders across the whole run - so ask for the largest page the endpoint
+     * allows rather than letting an assertion depend on how many orders earlier tests left behind.
+     * The PAID queue is oldest-first, which is exactly where that would have bitten.
+     */
+    private List<AdminOrderDto> adminOrders(OrderStatus status) throws Exception {
+        String url = "/api/v1/admin/orders?size=100" + (status == null ? "" : "&status=" + status);
+        String json = mockMvc.perform(MockMvcRequestBuilders.get(url).with(admin()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        PageResponse<AdminOrderDto> page = objectMapper.readValue(json,
+                objectMapper.getTypeFactory().constructParametricType(PageResponse.class, AdminOrderDto.class));
+        return page.content();
     }
 
     private <T> List<T> readList(String json, Class<T[]> arrayType) {

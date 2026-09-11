@@ -41,10 +41,20 @@ const VIEWS: OrderView[] = [
 ]
 
 /** The shipping queue and the order history behind it. */
+const ORDERS_PER_PAGE = 20
+
 export function AdminOrdersPage() {
   const [viewKey, setViewKey] = useState(VIEWS[0].key)
+  const [page, setPage] = useState(0)
   const view = VIEWS.find((candidate) => candidate.key === viewKey) ?? VIEWS[0]
-  const { data: orders, isLoading, error } = useAdminOrders(view.status)
+  const { data, isLoading, error } = useAdminOrders(view.status, page, ORDERS_PER_PAGE)
+  const orders = data?.content
+
+  // Switching tab has to reset the page, or "To ship" can land on a page that doesn't exist there.
+  const selectView = (key: string) => {
+    setViewKey(key)
+    setPage(0)
+  }
 
   return (
     <div>
@@ -54,7 +64,7 @@ export function AdminOrdersPage() {
             <button
               key={candidate.key}
               type="button"
-              onClick={() => setViewKey(candidate.key)}
+              onClick={() => selectView(candidate.key)}
               className={[
                 'rounded-full px-4 py-1.5 text-sm font-semibold transition-colors',
                 candidate.key === view.key
@@ -87,6 +97,25 @@ export function AdminOrdersPage() {
           <AdminOrderCard key={order.id} order={order} />
         ))}
       </div>
+
+      {data && data.totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <Button variant="ghost" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+            Previous
+          </Button>
+          <span className="text-sm text-ink-muted">
+            Page {page + 1} of {data.totalPages} · {data.totalElements} order
+            {data.totalElements === 1 ? '' : 's'}
+          </span>
+          <Button
+            variant="ghost"
+            disabled={page + 1 >= data.totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

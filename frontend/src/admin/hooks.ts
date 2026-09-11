@@ -18,7 +18,8 @@ import type {
 
 export const adminSurveysKey = ['admin', 'surveys'] as const
 export const adminProductsKey = ['admin', 'products'] as const
-export const adminOrdersKey = (status: OrderStatus | null) => ['admin', 'orders', status] as const
+export const adminOrdersKey = (status: OrderStatus | null, page: number, size: number) =>
+  ['admin', 'orders', status, page, size] as const
 export const adminUsersKey = (status: UserStatus | null) => ['admin', 'users', status] as const
 export const adminBlogPostsKey = (page: number, size: number) => ['admin', 'blog', page, size] as const
 export const adminContactMessagesKey = (page: number, size: number) =>
@@ -140,8 +141,11 @@ export function useDeactivateProduct() {
 
 // --- orders ---
 
-export function useAdminOrders(status: OrderStatus | null) {
-  return useQuery({ queryKey: adminOrdersKey(status), queryFn: () => api.listAdminOrders(status) })
+export function useAdminOrders(status: OrderStatus | null, page: number, size: number) {
+  return useQuery({
+    queryKey: adminOrdersKey(status, page, size),
+    queryFn: () => api.listAdminOrders(status, page, size),
+  })
 }
 
 export function useFulfillOrder() {

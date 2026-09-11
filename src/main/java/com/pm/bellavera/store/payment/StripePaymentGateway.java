@@ -89,8 +89,11 @@ public class StripePaymentGateway implements PaymentGateway {
 
         Session session = extractSession(event);
         if (session == null) {
-            log.warn("Stripe event {} of type {} carried no deserializable session", event.getId(), event.getType());
-            return Optional.empty();
+            // An event we were meant to act on that we could not read. Returning empty here would
+            // answer 200 and end Stripe's retries - the same silent-swallow that
+            // UnresolvedPaymentException exists to prevent for an unmatched order.
+            throw new UnresolvedPaymentException("Stripe event " + event.getId() + " of type "
+                    + event.getType() + " carried no deserializable session");
         }
 
         return Optional.of(new PaymentNotification(

@@ -28,6 +28,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 
 /**
  * One purchase. Named {@code customer_order} because {@code order} is a reserved word in Postgres.
@@ -101,8 +102,15 @@ public class CustomerOrder extends AuditableEntity {
     @Builder.Default
     private long lockVersion = 0;
 
+    /**
+     * {@code @BatchSize} rather than an eager or fetch-joined collection: every admin list renders
+     * each order's lines, so lazy-per-order is an N+1, but fetch-joining a collection alongside a
+     * paged query makes Hibernate paginate in memory. Batching loads a whole page's lines in one
+     * extra query and leaves pagination in SQL.
+     */
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("productName asc")
+    @BatchSize(size = 50)
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
 

@@ -117,6 +117,15 @@ function SurveyCard({ survey }: { survey: AdminSurveyDto }) {
         </div>
       ) : null}
 
+      {/* Retire/Restore can legitimately be refused - restoring a survey whose theme another
+          active survey now holds is rejected - so that message has to be visible, or the button
+          just appears to do nothing. */}
+      {updateSurvey.error ? (
+        <div className="mt-3">
+          <ErrorBanner error={updateSurvey.error} />
+        </div>
+      ) : null}
+
       <ul className="mt-4 flex flex-wrap gap-2 border-t border-surface-border pt-4">
         {survey.versions.map((version) => (
           <li key={version.versionId}>

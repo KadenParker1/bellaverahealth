@@ -1,5 +1,6 @@
 package com.pm.bellavera.admin.api;
 
+import com.pm.bellavera.common.PageResponse;
 import com.pm.bellavera.store.FulfillmentService;
 import com.pm.bellavera.store.OrderStatus;
 import com.pm.bellavera.store.api.AdminOrderDto;
@@ -7,8 +8,8 @@ import com.pm.bellavera.store.api.FulfillOrderRequest;
 import com.pm.bellavera.user.AppUser;
 import com.pm.bellavera.user.CurrentUser;
 import jakarta.validation.Valid;
-import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,6 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/admin/orders")
 public class AdminOrderController {
 
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final FulfillmentService fulfillmentService;
 
     public AdminOrderController(FulfillmentService fulfillmentService) {
@@ -31,10 +34,16 @@ public class AdminOrderController {
     /**
      * @param status omit for every order newest-first (the history); {@code PAID} is the packing
      *               queue, oldest-first; {@code FULFILLED} is what has already shipped
+     * @param page   0-based
+     * @param size   clamped to [1, {@value #MAX_PAGE_SIZE}]
      */
     @GetMapping
-    public List<AdminOrderDto> list(@RequestParam(required = false) OrderStatus status) {
-        return fulfillmentService.list(status);
+    public PageResponse<AdminOrderDto> list(@RequestParam(required = false) OrderStatus status,
+                                             @RequestParam(defaultValue = "0") int page,
+                                             @RequestParam(defaultValue = "20") int size) {
+        int clampedPage = Math.max(page, 0);
+        int clampedSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
+        return fulfillmentService.list(status, PageRequest.of(clampedPage, clampedSize));
     }
 
     @GetMapping("/{orderId}")

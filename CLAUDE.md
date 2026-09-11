@@ -329,7 +329,7 @@ configured to use, so wiring a real provider later has zero effect on what CI ru
 | POST | `/api/v1/admin/surveys/{id}/versions/{vid}/publish` | Archives the version it replaces |
 | GET / POST | `/api/v1/admin/products` | Catalog incl. inactive; create |
 | PATCH / DELETE | `/api/v1/admin/products/{id}` | Update; DELETE deactivates rather than destroys |
-| GET | `/api/v1/admin/orders` | Order history, newest first; `?status=PAID` is the packing queue (oldest first), `?status=FULFILLED` what has shipped |
+| GET | `/api/v1/admin/orders` | Order history, newest first, paginated; `?status=PAID` is the packing queue (oldest first), `?status=FULFILLED` what has shipped |
 | GET | `/api/v1/admin/orders/{id}` | One order in full, whatever its status |
 | POST | `/api/v1/admin/orders/{id}/fulfill` | Mark shipped; 409 unless the order is `PAID` |
 | GET / PATCH | `/api/v1/admin/users` / `/api/v1/admin/users/{id}` | List / ban / reinstate |
@@ -452,11 +452,20 @@ stays hidden), logged as a warning. Matters most for the migration-authored surv
 which skips the admin editor's own validation. Fixed on both the backend and its frontend mirror
 (`displayRuleEngine.ts`).
 
-**Pagination.** `GET /api/v1/store/orders/me` and `GET /api/v1/admin/blog` /
-`GET /api/v1/admin/contact-messages` / `GET /api/v1/blog` all return `PageResponse<T>`
+**Pagination.** Every list that grows without bound returns `PageResponse<T>`
 (`common/PageResponse.java`) rather than a bare list — `page`/`size` query params, clamped
-server-side. `GET /api/v1/admin/orders` is still a bare list and due for the same treatment; it
-hasn't caused a problem yet only because order volume is still low.
+server-side: `/store/orders/me`, `/blog`, `/admin/blog`, `/admin/contact-messages`, and
+`/admin/orders`.
+
+**Fetching a paged list without an N+1 - and without the collection-fetch trap.** The admin list
+DTOs read across a lazy relation (`AdminOrderDto` → `order.getUser()`, `AdminBlogPostDto` →
+`post.getAuthor()`, `AdminContactMessageDto` → `message.getUser()`), which left alone costs one
+query per row. Each is fixed with `@EntityGraph` on the paged repository method — but only for
+*to-one* relations. `CustomerOrder.items` is a collection, and fetch-joining a collection alongside
+`firstResult`/`maxResults` makes Hibernate load every matching row and paginate in memory
+(`HHH90003004`), which is far worse than the N+1 it would fix. That one uses `@BatchSize` on the
+collection instead, so a page's lines load in one extra query and pagination stays in SQL. If you
+add a list here, follow the same split.
 
 **Survey preview and the theme-uniqueness guard** — see the Frontend section above for both; they
 are documented there rather than repeated here.
